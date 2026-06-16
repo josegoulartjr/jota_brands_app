@@ -2,46 +2,55 @@ import Link from 'next/link'
 import { Briefcase, Users, FileText, TrendingUp, Settings, ArrowRight } from 'lucide-react'
 
 const cards = [
-  { href: '/jobs', icon: Briefcase, label: 'Jobs', desc: 'Cadastre e acompanhe seus jobs', color: '#6366f1' },
-  { href: '/clientes', icon: Users, label: 'Clientes', desc: 'Gerencie suas tags de clientes', color: '#f59e0b' },
-  { href: '/relatorio', icon: FileText, label: 'Relatório', desc: 'Exporte PDF com QR Code Pix', color: '#10b981' },
-  { href: '/financeiro', icon: TrendingUp, label: 'Financeiro', desc: 'Entradas, saídas e saldo', color: '#3b82f6' },
-  { href: '/configuracoes', icon: Settings, label: 'Configurações', desc: 'Dados da agência e Pix', color: '#8b5cf6' },
+  { href: '/jobs', icon: Briefcase, label: 'Jobs', desc: 'Cadastre e acompanhe seus jobs', color: '#B72818' },
+  { href: '/clientes', icon: Users, label: 'Clientes', desc: 'Gerencie suas tags de clientes', color: '#E5321E' },
+  { href: '/relatorio', icon: FileText, label: 'Relatório', desc: 'Exporte PDF com QR Code Pix', color: '#942013' },
+  { href: '/financeiro', icon: TrendingUp, label: 'Financeiro', desc: 'Entradas, saídas e saldo', color: '#B72818' },
+  { href: '/configuracoes', icon: Settings, label: 'Configurações', desc: 'Dados da agência e Pix', color: '#595959' },
 ]
 
 export default function Home() {
   return (
     <div className="p-6 max-w-3xl">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold text-white">Jota Financeiro</h1>
-        <p className="text-zinc-400 mt-2">Gestão de jobs e finanças da agência</p>
+        <h1 className="text-2xl font-bold text-white">Bem-vindo</h1>
+        <p className="text-sm mt-1" style={{ color: '#666' }}>Gestão de jobs e finanças da Jota Brands</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {cards.map(({ href, icon: Icon, label, desc, color }) => (
           <Link
             key={href}
             href={href}
-            className="group flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-all hover:bg-zinc-800/50"
+            className="group flex items-center gap-4 rounded-xl p-5 transition-all duration-150 hover:scale-[1.01]"
+            style={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = '#3A3A3A')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = '#2A2A2A')}
           >
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}22` }}>
-              <Icon size={22} style={{ color }} />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20` }}>
+              <Icon size={20} style={{ color }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold">{label}</p>
-              <p className="text-zinc-500 text-sm">{desc}</p>
+              <p className="text-white font-semibold text-sm">{label}</p>
+              <p className="text-xs mt-0.5" style={{ color: '#666' }}>{desc}</p>
             </div>
-            <ArrowRight size={16} className="text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+            <ArrowRight size={15} style={{ color: '#444' }} className="group-hover:translate-x-0.5 transition-transform shrink-0" />
           </Link>
         ))}
       </div>
 
-      <div className="mt-10 bg-violet-500/10 border border-violet-500/20 rounded-xl p-5">
-        <p className="text-violet-300 text-sm font-medium mb-1">Primeiro acesso?</p>
-        <p className="text-zinc-400 text-sm">
-          Comece em <Link href="/configuracoes" className="text-violet-400 hover:underline">Configurações</Link> para cadastrar seus dados de Pix,
-          depois em <Link href="/clientes" className="text-violet-400 hover:underline">Clientes</Link> para criar suas tags,
-          e então registre seus jobs em <Link href="/jobs" className="text-violet-400 hover:underline">Jobs</Link>.
+      <div className="mt-8 rounded-xl p-5" style={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A' }}>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#B72818' }} />
+          <p className="text-white text-sm font-medium">Primeiro acesso?</p>
+        </div>
+        <p className="text-sm" style={{ color: '#666' }}>
+          Comece em{' '}
+          <Link href="/configuracoes" className="hover:underline" style={{ color: '#B72818' }}>Configurações</Link>{' '}
+          para cadastrar seus dados de Pix, depois em{' '}
+          <Link href="/clientes" className="hover:underline" style={{ color: '#B72818' }}>Clientes</Link>{' '}
+          para criar suas tags, e então registre seus jobs em{' '}
+          <Link href="/jobs" className="hover:underline" style={{ color: '#B72818' }}>Jobs</Link>.
         </p>
       </div>
     </div>

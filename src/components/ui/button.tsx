@@ -10,13 +10,13 @@ export function Button({ className, variant = 'default', size = 'md', ...props }
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:pointer-events-none',
+        'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
         {
-          'bg-violet-600 text-white hover:bg-violet-700': variant === 'default',
-          'border border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white': variant === 'outline',
-          'bg-transparent text-zinc-400 hover:bg-zinc-800 hover:text-white': variant === 'ghost',
-          'bg-red-600 text-white hover:bg-red-700': variant === 'destructive',
-          'bg-zinc-800 text-zinc-200 hover:bg-zinc-700': variant === 'secondary',
+          'text-white hover:opacity-90 active:scale-95': variant === 'default',
+          'border text-white/70 hover:text-white hover:bg-white/5 active:scale-95': variant === 'outline',
+          'text-white/50 hover:bg-white/5 hover:text-white': variant === 'ghost',
+          'bg-red-700 text-white hover:bg-red-800 active:scale-95': variant === 'destructive',
+          'text-white/70 hover:bg-white/10 hover:text-white': variant === 'secondary',
         },
         {
           'h-8 px-3 text-xs gap-1.5': size === 'sm',
@@ -26,6 +26,7 @@ export function Button({ className, variant = 'default', size = 'md', ...props }
         },
         className
       )}
+      style={variant === 'default' ? { backgroundColor: '#B72818', ...props.style } : variant === 'outline' ? { borderColor: '#2E2E2E', ...props.style } : variant === 'secondary' ? { backgroundColor: '#222', ...props.style } : props.style}
       {...props}
     />
   )
