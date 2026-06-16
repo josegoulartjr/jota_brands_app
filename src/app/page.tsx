@@ -1,65 +1,49 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { Briefcase, Users, FileText, TrendingUp, Settings, ArrowRight } from 'lucide-react'
+
+const cards = [
+  { href: '/jobs', icon: Briefcase, label: 'Jobs', desc: 'Cadastre e acompanhe seus jobs', color: '#6366f1' },
+  { href: '/clientes', icon: Users, label: 'Clientes', desc: 'Gerencie suas tags de clientes', color: '#f59e0b' },
+  { href: '/relatorio', icon: FileText, label: 'Relatório', desc: 'Exporte PDF com QR Code Pix', color: '#10b981' },
+  { href: '/financeiro', icon: TrendingUp, label: 'Financeiro', desc: 'Entradas, saídas e saldo', color: '#3b82f6' },
+  { href: '/configuracoes', icon: Settings, label: 'Configurações', desc: 'Dados da agência e Pix', color: '#8b5cf6' },
+]
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="p-6 max-w-3xl">
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-white">Jota Financeiro</h1>
+        <p className="text-zinc-400 mt-2">Gestão de jobs e finanças da agência</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {cards.map(({ href, icon: Icon, label, desc, color }) => (
+          <Link
+            key={href}
+            href={href}
+            className="group flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 transition-all hover:bg-zinc-800/50"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}22` }}>
+              <Icon size={22} style={{ color }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold">{label}</p>
+              <p className="text-zinc-500 text-sm">{desc}</p>
+            </div>
+            <ArrowRight size={16} className="text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-10 bg-violet-500/10 border border-violet-500/20 rounded-xl p-5">
+        <p className="text-violet-300 text-sm font-medium mb-1">Primeiro acesso?</p>
+        <p className="text-zinc-400 text-sm">
+          Comece em <Link href="/configuracoes" className="text-violet-400 hover:underline">Configurações</Link> para cadastrar seus dados de Pix,
+          depois em <Link href="/clientes" className="text-violet-400 hover:underline">Clientes</Link> para criar suas tags,
+          e então registre seus jobs em <Link href="/jobs" className="text-violet-400 hover:underline">Jobs</Link>.
+        </p>
+      </div>
     </div>
-  );
+  )
 }
