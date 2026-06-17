@@ -230,7 +230,7 @@ export default function FinanceiroPage() {
               <YAxis tick={{ fill: '#666', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip
                 contentStyle={CHART_TOOLTIP_STYLE}
-                formatter={(v: number) => formatCurrency(v)}
+                formatter={(v) => formatCurrency(Number(v))}
                 cursor={{ fill: '#ffffff08' }}
               />
               <Bar dataKey="Entradas" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -254,7 +254,7 @@ export default function FinanceiroPage() {
                     <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatCurrency(Number(v))} />
                 <Legend iconSize={8} iconType="circle" formatter={(v) => <span style={{ color: '#888', fontSize: 11 }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
