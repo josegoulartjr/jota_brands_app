@@ -22,10 +22,8 @@ export default function Home() {
           <Link
             key={href}
             href={href}
-            className="group flex items-center gap-4 rounded-xl p-5 transition-all duration-150 hover:scale-[1.01]"
+            className="group flex items-center gap-4 rounded-xl p-5 transition-all duration-150 hover:scale-[1.01] nav-card"
             style={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A' }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = '#3A3A3A')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = '#2A2A2A')}
           >
             <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20` }}>
               <Icon size={20} style={{ color }} />
