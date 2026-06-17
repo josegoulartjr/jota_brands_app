@@ -108,6 +108,29 @@ export default function RelatorioPage() {
   async function exportPDF() {
     if (filtered.length === 0) return toast.error('Nenhum job para exportar')
     try {
+      // Gerar token da fatura (upsert por client+month+year)
+      let faturaUrl = ''
+      if (filterClient) {
+        const existing = await supabase
+          .from('invoices')
+          .select('token')
+          .eq('client_id', filterClient)
+          .eq('month', month)
+          .eq('year', year)
+          .maybeSingle()
+
+        let token = existing.data?.token
+        if (!token) {
+          const { data: inv } = await supabase
+            .from('invoices')
+            .insert({ client_id: filterClient, month, year })
+            .select('token')
+            .single()
+          token = inv?.token
+        }
+        if (token) faturaUrl = `${window.location.origin}/fatura/${token}`
+      }
+
       const { default: jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -115,92 +138,150 @@ export default function RelatorioPage() {
         ? clients.find(c => c.id === filterClient)?.name || 'Cliente'
         : 'Todos os Clientes'
 
-      // Cabeçalho
-      doc.setFillColor(183, 40, 24)
-      doc.rect(0, 0, 210, 35, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(13)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`Relatório de Jobs – ${getMonthName(month)}/${year}`, 15, 18)
-      doc.text(`Cliente: ${clientName}`, 15, 28)
+      const W = 210
+      const H = 297
 
-      // Tabela de jobs
-      let y = 55
-      doc.setTextColor(50, 50, 50)
-      doc.setFontSize(9)
+      // Fundo escuro total
+      doc.setFillColor(17, 17, 17)
+      doc.rect(0, 0, W, H, 'F')
+
+      // Header vermelho
+      doc.setFillColor(183, 40, 24)
+      doc.rect(0, 0, W, 42, 'F')
+
+      // Título
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(18)
       doc.setFont('helvetica', 'bold')
+      doc.text('A sua fatura chegou!', 14, 18)
+
+      // Subtítulo
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(255, 255, 255)
+      doc.text('Agradecemos a nossa parceria.', 14, 27)
+
+      // Info cliente/período
+      doc.setFontSize(9)
+      doc.setTextColor(255, 220, 215)
+      doc.text(`${clientName}  ·  ${getMonthName(month)}/${year}`, 14, 36)
+
+      // Card da tabela — fundo ligeiramente mais claro
+      doc.setFillColor(26, 26, 26)
+      doc.roundedRect(10, 50, W - 20, 8 + filtered.length * 10 + 24, 3, 3, 'F')
 
       // Cabeçalho da tabela
-      doc.setFillColor(245, 245, 250)
-      doc.rect(10, y - 5, 190, 8, 'F')
-      doc.text('Job', 12, y)
-      doc.text('Cliente', 80, y)
-      doc.text('Tipo', 130, y)
-      doc.text('Valor', 175, y, { align: 'right' })
-      y += 8
+      let y = 60
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(136, 136, 136)
+      doc.text('JOB', 16, y)
+      doc.text('TIPO', 120, y)
+      doc.text('VALOR', W - 16, y, { align: 'right' })
 
+      // Linha separadora
+      doc.setDrawColor(42, 42, 42)
+      doc.setLineWidth(0.3)
+      doc.line(10, y + 3, W - 10, y + 3)
+      y += 10
+
+      // Linhas dos jobs
       doc.setFont('helvetica', 'normal')
       filtered.forEach((job, i) => {
-        if (y > 255) {
+        if (y > 250) {
           doc.addPage()
+          doc.setFillColor(17, 17, 17)
+          doc.rect(0, 0, W, H, 'F')
           y = 20
         }
-        if (i % 2 === 0) {
-          doc.setFillColor(250, 250, 252)
-          doc.rect(10, y - 5, 190, 7, 'F')
-        }
-        doc.setTextColor(30, 30, 30)
-        doc.text(job.name.substring(0, 38), 12, y)
-        doc.text(job.client?.name?.substring(0, 18) || '', 80, y)
+
+        doc.setFontSize(9)
+        doc.setTextColor(255, 255, 255)
+        doc.text(job.name.substring(0, 42), 16, y)
+
+        doc.setTextColor(136, 136, 136)
         const tipoText = job.type === 'hora'
-          ? `${job.hours || 0}h × R$${job.hourly_rate}`
-          : 'Fechado'
-        doc.text(tipoText, 130, y)
+          ? `${job.hours || 0}h x R$${job.hourly_rate}/h`
+          : 'Valor fechado'
+        doc.text(tipoText, 120, y)
+
         doc.setFont('helvetica', 'bold')
-        doc.text(formatCurrency(calculateJobValue(job)), 200, y, { align: 'right' })
+        doc.setTextColor(255, 255, 255)
+        doc.text(formatCurrency(calculateJobValue(job)), W - 16, y, { align: 'right' })
         doc.setFont('helvetica', 'normal')
-        y += 8
+
+        if (i < filtered.length - 1) {
+          doc.setDrawColor(42, 42, 42)
+          doc.setLineWidth(0.2)
+          doc.line(16, y + 3, W - 16, y + 3)
+        }
+        y += 10
       })
 
-      // Total
-      y += 4
+      // Linha total
+      y += 2
       doc.setDrawColor(183, 40, 24)
-      doc.setLineWidth(0.5)
-      doc.line(10, y, 200, y)
-      y += 6
-      doc.setFontSize(12)
+      doc.setLineWidth(0.4)
+      doc.line(10, y, W - 10, y)
+      y += 8
+      doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(183, 40, 24)
-      doc.text('TOTAL', 12, y)
-      doc.text(formatCurrency(totalValue), 200, y, { align: 'right' })
+      doc.setTextColor(229, 50, 30)
+      doc.text('TOTAL', 16, y)
+      doc.text(formatCurrency(totalValue), W - 16, y, { align: 'right' })
+      y += 16
 
-      // QR Code + Pix
-      if (qrDataUrl && settings?.pix_key) {
-        y += 16
+      // Botão / link da fatura
+      if (faturaUrl) {
+        doc.setFillColor(183, 40, 24)
+        doc.roundedRect(14, y, 80, 12, 3, 3, 'F')
         doc.setFontSize(10)
-        doc.setTextColor(50, 50, 50)
         doc.setFont('helvetica', 'bold')
-        doc.text('Pagamento via Pix', 12, y)
-        y += 4
+        doc.setTextColor(255, 255, 255)
+        doc.textWithLink('Acessar fatura online', 54, y + 7.5, { url: faturaUrl, align: 'center' })
+        y += 20
+      }
+
+      // Seção Pix
+      if (qrDataUrl && settings?.pix_key) {
+        doc.setFillColor(26, 26, 26)
+        doc.roundedRect(10, y, W - 20, 48, 3, 3, 'F')
+
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(255, 255, 255)
+        doc.text('Pagamento via Pix', 16, y + 10)
+
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text(`Chave: ${settings.pix_key}`, 12, y + 4)
+        doc.setFontSize(8.5)
+        doc.setTextColor(170, 170, 170)
+        doc.text(`Chave: `, 16, y + 20)
+        doc.setTextColor(255, 255, 255)
+        doc.text(settings.pix_key, 30, y + 20)
+
         if (settings.payment_link) {
-          doc.text(`Link: ${settings.payment_link}`, 12, y + 10)
+          doc.setTextColor(229, 50, 30)
+          doc.textWithLink('Link de pagamento', 16, y + 30, { url: settings.payment_link })
         }
-        doc.addImage(qrDataUrl, 'PNG', 155, y - 2, 40, 40)
+
+        doc.addImage(qrDataUrl, 'PNG', W - 54, y + 4, 40, 40)
+        y += 56
       }
 
       // Rodapé
       doc.setFontSize(8)
-      doc.setTextColor(150, 150, 150)
+      doc.setTextColor(68, 68, 68)
       doc.text(
-        `Emitido em ${new Date().toLocaleDateString('pt-BR')} | ${settings?.company_name || 'Jota Agência'}`,
-        105, 290, { align: 'center' }
+        `${settings?.company_name || 'Jota Agência'}  ·  Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
+        W / 2, H - 10, { align: 'center' }
       )
 
-      doc.save(`relatorio-${getMonthName(month).toLowerCase()}-${year}.pdf`)
-      toast.success('PDF exportado!')
+      doc.save(`fatura-${clientName.toLowerCase().replace(/\s+/g, '-')}-${getMonthName(month).toLowerCase()}-${year}.pdf`)
+      if (faturaUrl) {
+        toast.success('PDF exportado com link da fatura!')
+      } else {
+        toast.success('PDF exportado!')
+      }
     } catch (e) {
       toast.error('Erro ao gerar PDF')
     }
@@ -271,7 +352,7 @@ export default function RelatorioPage() {
                   </td>
                   <td className="px-4 py-3">
                     {job.clickup_url && (
-                      <a href={job.clickup_url} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-violet-400">
+                      <a href={job.clickup_url} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-red-500">
                         <ExternalLink size={13} />
                       </a>
                     )}
@@ -284,9 +365,9 @@ export default function RelatorioPage() {
             </tbody>
             {filtered.length > 0 && (
               <tfoot>
-                <tr className="border-t border-violet-500/30 bg-violet-500/5">
-                  <td colSpan={4} className="px-5 py-4 text-violet-300 font-bold">Total do período</td>
-                  <td className="px-5 py-4 text-right text-violet-300 font-bold text-lg">
+                <tr className="border-t border-red-900/30 bg-red-900/5">
+                  <td colSpan={4} className="px-5 py-4 text-red-400 font-bold">Total do período</td>
+                  <td className="px-5 py-4 text-right text-red-400 font-bold text-lg">
                     {formatCurrency(totalValue)}
                   </td>
                 </tr>
@@ -300,12 +381,12 @@ export default function RelatorioPage() {
           <div className="border-t border-zinc-800 px-6 py-5 flex items-center gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
-                <QrCode size={16} className="text-violet-400" />
+                <QrCode size={16} className="text-red-500" />
                 <span className="text-white font-semibold text-sm">Pagamento via Pix</span>
               </div>
               <p className="text-zinc-400 text-xs mb-1">Chave CNPJ: <span className="text-white">{settings.pix_key}</span></p>
               {settings.payment_link && (
-                <a href={settings.payment_link} target="_blank" rel="noopener noreferrer" className="text-violet-400 text-xs hover:underline flex items-center gap-1">
+                <a href={settings.payment_link} target="_blank" rel="noopener noreferrer" className="text-red-500 text-xs hover:underline flex items-center gap-1">
                   <ExternalLink size={10} /> Link de pagamento
                 </a>
               )}
@@ -320,7 +401,7 @@ export default function RelatorioPage() {
 
         {!settings?.pix_key && (
           <div className="border-t border-zinc-800 px-6 py-4">
-            <p className="text-zinc-500 text-sm">Configure sua chave Pix em <a href="/configuracoes" className="text-violet-400 hover:underline">Configurações</a> para exibir QR Code no PDF.</p>
+            <p className="text-zinc-500 text-sm">Configure sua chave Pix em <a href="/configuracoes" className="text-red-500 hover:underline">Configurações</a> para exibir QR Code no PDF.</p>
           </div>
         )}
       </div>

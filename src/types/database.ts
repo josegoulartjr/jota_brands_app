@@ -1,5 +1,5 @@
 export type JobType = 'hora' | 'fechado'
-export type JobStatus = 'pendente' | 'aprovacao' | 'concluido' | 'faturado'
+export type JobStatus = 'concluido' | 'faturado' | 'pago'
 export type TransactionType = 'entrada' | 'saida'
 
 export interface Client {
@@ -47,6 +47,8 @@ export interface Settings {
   company_name: string
   payment_link?: string
   hourly_rate: number
+  clickup_token?: string
+  clickup_list_ids?: string
 }
 
 export type Database = {

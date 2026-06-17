@@ -12,10 +12,9 @@ import type { Job, Client } from '@/types/database'
 import toast from 'react-hot-toast'
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pendente:  { label: 'Pendente',   color: '#f59e0b' },
-  aprovacao: { label: 'Aprovação',  color: '#3b82f6' },
-  concluido: { label: 'Concluído',  color: '#10b981' },
-  faturado:  { label: 'Faturado',   color: '#8b5cf6' },
+  concluido: { label: 'Backlog',   color: '#888888' },
+  faturado:  { label: 'Faturado',  color: '#B72818' },
+  pago:      { label: 'Pago',      color: '#059669' },
 }
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -49,7 +48,7 @@ const emptyForm = (): JobForm => ({
   hourly_rate: '40',
   fixed_value: '',
   clickup_url: '',
-  status: 'pendente',
+  status: 'concluido',
   notes: '',
 })
 
@@ -284,7 +283,7 @@ export default function JobsPage() {
                         href={job.clickup_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-zinc-500 hover:text-violet-400 transition-colors"
+                        className="text-zinc-500 hover:text-red-500 transition-colors"
                       >
                         <ExternalLink size={14} />
                       </a>
@@ -372,7 +371,7 @@ export default function JobsPage() {
                 onClick={() => setForm(f => ({ ...f, type: 'hora' }))}
                 className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${
                   form.type === 'hora'
-                    ? 'border-violet-500 bg-violet-500/10 text-violet-400'
+                    ? 'border-red-700 bg-red-900/20 text-red-400'
                     : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
                 }`}
               >
@@ -383,7 +382,7 @@ export default function JobsPage() {
                 onClick={() => setForm(f => ({ ...f, type: 'fechado' }))}
                 className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${
                   form.type === 'fechado'
-                    ? 'border-violet-500 bg-violet-500/10 text-violet-400'
+                    ? 'border-red-700 bg-red-900/20 text-red-400'
                     : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
                 }`}
               >
@@ -429,8 +428,8 @@ export default function JobsPage() {
           )}
 
           {form.type === 'hora' && form.hours && (
-            <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg px-4 py-2">
-              <span className="text-violet-400 text-sm">
+            <div className="bg-red-900/10 border border-red-900/20 rounded-lg px-4 py-2">
+              <span className="text-red-400 text-sm">
                 Total: <strong>{formatCurrency(Number(form.hours) * Number(form.hourly_rate || 40))}</strong>
               </span>
             </div>
@@ -452,7 +451,7 @@ export default function JobsPage() {
               placeholder="Detalhes adicionais..."
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-700 resize-none"
             />
           </div>
 

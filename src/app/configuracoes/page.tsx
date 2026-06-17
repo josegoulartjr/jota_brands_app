@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Save, QrCode } from 'lucide-react'
+import { Save, QrCode, Plug } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ export default function ConfiguracoesPage() {
     pix_key_type: 'cnpj',
     payment_link: '',
     hourly_rate: '40',
+    clickup_token: '',
   })
   const [saving, setSaving] = useState(false)
   const [qrUrl, setQrUrl] = useState('')
@@ -30,6 +31,7 @@ export default function ConfiguracoesPage() {
         pix_key_type: data.pix_key_type,
         payment_link: data.payment_link || '',
         hourly_rate: data.hourly_rate.toString(),
+        clickup_token: data.clickup_token || '',
       })
     }
   }, [])
@@ -58,6 +60,7 @@ export default function ConfiguracoesPage() {
       pix_key_type: form.pix_key_type,
       payment_link: form.payment_link.trim() || null,
       hourly_rate: Number(form.hourly_rate) || 40,
+      clickup_token: form.clickup_token.trim() || null,
     }
 
     const { error } = settings
@@ -101,7 +104,7 @@ export default function ConfiguracoesPage() {
 
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <QrCode size={16} className="text-violet-400" />
+            <QrCode size={16} className="text-red-500" />
             <h3 className="text-white font-medium text-sm">Dados de pagamento Pix</h3>
           </div>
 
@@ -148,6 +151,24 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        <hr className="border-zinc-800" />
+
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Plug size={16} style={{ color: '#B72818' }} />
+            <h3 className="text-white font-medium text-sm">Integração ClickUp</h3>
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Personal API Token</label>
+            <Input
+              placeholder="pk_..."
+              value={form.clickup_token}
+              onChange={e => setForm(f => ({ ...f, clickup_token: e.target.value }))}
+            />
+            <p className="text-zinc-600 text-xs mt-1">ClickUp → Settings → Apps → API Token</p>
           </div>
         </div>
 

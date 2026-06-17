@@ -2,12 +2,13 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Briefcase, Users, FileText, TrendingUp, Settings } from 'lucide-react'
+import { LayoutDashboard, Briefcase, Users, FileText, TrendingUp, Settings, Kanban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const nav = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/jobs', icon: Briefcase, label: 'Jobs' },
+  { href: '/kanban', icon: Kanban, label: 'Kanban' },
   { href: '/clientes', icon: Users, label: 'Clientes' },
   { href: '/relatorio', icon: FileText, label: 'Relatório' },
   { href: '/financeiro', icon: TrendingUp, label: 'Financeiro' },

@@ -50,7 +50,7 @@ export default function ClientesPage() {
       ? await supabase.from('clients').update(payload).eq('id', editing.id)
       : await supabase.from('clients').insert(payload)
 
-    if (error) toast.error('Erro ao salvar')
+    if (error) toast.error(error.message || 'Erro ao salvar')
     else {
       toast.success(editing ? 'Cliente atualizado!' : 'Cliente criado!')
       setModalOpen(false)
