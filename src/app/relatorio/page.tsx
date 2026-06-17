@@ -116,16 +116,13 @@ export default function RelatorioPage() {
         : 'Todos os Clientes'
 
       // Cabeçalho
-      doc.setFillColor(109, 40, 217)
-      doc.rect(0, 0, 210, 40, 'F')
+      doc.setFillColor(183, 40, 24)
+      doc.rect(0, 0, 210, 35, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(22)
-      doc.setFont('helvetica', 'bold')
-      doc.text(settings?.company_name || 'Jota Agência', 15, 18)
-      doc.setFontSize(11)
+      doc.setFontSize(13)
       doc.setFont('helvetica', 'normal')
-      doc.text(`Relatório de Jobs – ${getMonthName(month)}/${year}`, 15, 28)
-      doc.text(`Cliente: ${clientName}`, 15, 36)
+      doc.text(`Relatório de Jobs – ${getMonthName(month)}/${year}`, 15, 18)
+      doc.text(`Cliente: ${clientName}`, 15, 28)
 
       // Tabela de jobs
       let y = 55
@@ -167,13 +164,13 @@ export default function RelatorioPage() {
 
       // Total
       y += 4
-      doc.setDrawColor(109, 40, 217)
+      doc.setDrawColor(183, 40, 24)
       doc.setLineWidth(0.5)
       doc.line(10, y, 200, y)
       y += 6
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(109, 40, 217)
+      doc.setTextColor(183, 40, 24)
       doc.text('TOTAL', 12, y)
       doc.text(formatCurrency(totalValue), 200, y, { align: 'right' })
 
@@ -238,9 +235,8 @@ export default function RelatorioPage() {
       {/* Preview do relatório */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
         {/* Header do recibo */}
-        <div className="bg-violet-700 px-6 py-5">
-          <h2 className="text-white font-bold text-xl">{settings?.company_name || 'Jota Agência'}</h2>
-          <p className="text-violet-200 text-sm mt-1">
+        <div className="px-6 py-5" style={{ backgroundColor: '#B72818' }}>
+          <p className="text-white/80 text-sm">
             Relatório de Jobs — {getMonthName(month)}/{year}
           </p>
         </div>

@@ -20,16 +20,8 @@ export function Sidebar() {
   return (
     <aside className="w-16 lg:w-56 flex flex-col py-5 shrink-0" style={{ backgroundColor: '#1C1C1C', borderRight: '1px solid #2A2A2A' }}>
       {/* Logo */}
-      <div className="px-3 lg:px-4 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 shrink-0 flex items-center justify-center">
-            <Image src="/logo.svg" alt="Jota Brands" width={36} height={36} className="rounded-full" />
-          </div>
-          <div className="hidden lg:block min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight truncate">Jota Brands</p>
-            <p className="text-xs leading-tight" style={{ color: '#666' }}>Financeiro</p>
-          </div>
-        </div>
+      <div className="flex justify-center mb-8 px-2">
+        <Image src="/logo.svg" alt="Jota Brands" width={52} height={52} className="rounded-full" />
       </div>
 
       {/* Nav */}
