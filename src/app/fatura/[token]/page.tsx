@@ -78,7 +78,7 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
   const total = jobs.reduce((sum, j) => sum + calculateJobValue(j), 0)
   const clientName = invoice.client_id ? (jobs[0]?.client?.name || 'Cliente') : 'Todos os Clientes'
   const monthName = getMonthName(invoice.month)
-  const pixPayload = settings?.pix_key ? buildPixPayload(settings.pix_key, total, settings.company_name || 'Jota') : null
+  const pixPayload = buildPixPayload(settings?.pix_key || '27.962.862/0001-51', total, settings?.company_name || 'JOSE GOULART JR')
 
   return (
     <div style={{ background: '#111111', minHeight: '100vh', padding: '40px 16px 64px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
