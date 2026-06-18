@@ -6,27 +6,6 @@ import type { Job, Client, Settings } from '@/types/database'
 
 interface JobWithClient extends Job { client?: Client }
 
-function buildPixPayload(key: string, amount: number, merchantName: string) {
-  const clean = (s: string) => s.replace(/[^\x20-\x7E]/g, '').substring(0, 25)
-  const name = clean(merchantName) || 'AGENCIA JOTA'
-  function tlv(id: string, value: string) {
-    const len = value.length.toString().padStart(2, '0')
-    return `${id}${len}${value}`
-  }
-  const merchantAccountInfo = tlv('00', 'BR.GOV.BCB.PIX') + tlv('01', key)
-  const payload = [
-    tlv('00', '01'), tlv('26', merchantAccountInfo), tlv('52', '0000'), tlv('53', '986'),
-    ...(amount > 0 ? [tlv('54', amount.toFixed(2))] : []),
-    tlv('58', 'BR'), tlv('59', name), tlv('60', 'SAO PAULO'), tlv('62', tlv('05', '***')),
-  ].join('')
-  const crcInput = payload + '6304'
-  let crc = 0xFFFF
-  for (const char of crcInput) {
-    crc ^= char.charCodeAt(0) << 8
-    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1
-  }
-  return payload + '6304' + (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0')
-}
 
 export default function FaturaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -78,7 +57,6 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
   const total = jobs.reduce((sum, j) => sum + calculateJobValue(j), 0)
   const clientName = invoice.client_id ? (jobs[0]?.client?.name || 'Cliente') : 'Todos os Clientes'
   const monthName = getMonthName(invoice.month)
-  const pixPayload = buildPixPayload(settings?.pix_key || '27.962.862/0001-51', total, settings?.company_name || 'JOSE GOULART JR')
 
   return (
     <div style={{ background: '#111111', minHeight: '100vh', padding: '40px 16px 64px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
@@ -132,15 +110,10 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
             )}
           </table>
 
-          {pixPayload && (
-            <div style={{ borderTop: '1px solid #2a2a2a', padding: '24px 28px', display: 'flex', justifyContent: 'center' }}>
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pixPayload)}`}
-                alt="QR Code Pix" width={180} height={180}
-                style={{ borderRadius: 8, background: '#fff', padding: 8 }}
-              />
+          <div style={{ borderTop: '1px solid #2a2a2a', padding: '24px 28px', display: 'flex', justifyContent: 'center' }}>
+              <img src="/qr-code.png" alt="QR Code Pix" width={180} height={180}
+                style={{ borderRadius: 8, background: '#fff', padding: 8 }} />
             </div>
-          )}
         </div>
 
       </div>
