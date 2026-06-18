@@ -131,152 +131,53 @@ export default function RelatorioPage() {
         if (token) faturaUrl = `${window.location.origin}/fatura/${token}`
       }
 
-      const { default: jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const { PDFDocument, PDFName, PDFString } = await import('pdf-lib')
 
       const clientName = filterClient
         ? clients.find(c => c.id === filterClient)?.name || 'Cliente'
         : 'Todos os Clientes'
 
-      const W = 210
-      const H = 297
+      // Carregar o PDF base (capa-fatura.pdf)
+      const baseRes = await fetch('/capa-fatura.pdf')
+      const baseBytes = await baseRes.arrayBuffer()
+      const pdfDoc = await PDFDocument.load(baseBytes)
+      const page = pdfDoc.getPage(0)
+      const { width, height } = page.getSize()
 
-      // Fundo escuro total
-      doc.setFillColor(17, 17, 17)
-      doc.rect(0, 0, W, H, 'F')
-
-      // Header vermelho
-      doc.setFillColor(183, 40, 24)
-      doc.rect(0, 0, W, 42, 'F')
-
-      // Título
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(18)
-      doc.setFont('helvetica', 'bold')
-      doc.text('A sua fatura chegou!', 14, 18)
-
-      // Subtítulo
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(255, 255, 255)
-      doc.text('Agradecemos a nossa parceria.', 14, 27)
-
-      // Info cliente/período
-      doc.setFontSize(9)
-      doc.setTextColor(255, 220, 215)
-      doc.text(`${clientName}  ·  ${getMonthName(month)}/${year}`, 14, 36)
-
-      // Card da tabela — fundo ligeiramente mais claro
-      doc.setFillColor(26, 26, 26)
-      doc.roundedRect(10, 50, W - 20, 8 + filtered.length * 10 + 24, 3, 3, 'F')
-
-      // Cabeçalho da tabela
-      let y = 60
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(136, 136, 136)
-      doc.text('JOB', 16, y)
-      doc.text('TIPO', 120, y)
-      doc.text('VALOR', W - 16, y, { align: 'right' })
-
-      // Linha separadora
-      doc.setDrawColor(42, 42, 42)
-      doc.setLineWidth(0.3)
-      doc.line(10, y + 3, W - 10, y + 3)
-      y += 10
-
-      // Linhas dos jobs
-      doc.setFont('helvetica', 'normal')
-      filtered.forEach((job, i) => {
-        if (y > 250) {
-          doc.addPage()
-          doc.setFillColor(17, 17, 17)
-          doc.rect(0, 0, W, H, 'F')
-          y = 20
-        }
-
-        doc.setFontSize(9)
-        doc.setTextColor(255, 255, 255)
-        doc.text(job.name.substring(0, 42), 16, y)
-
-        doc.setTextColor(136, 136, 136)
-        const tipoText = job.type === 'hora'
-          ? `${job.hours || 0}h x R$${job.hourly_rate}/h`
-          : 'Valor fechado'
-        doc.text(tipoText, 120, y)
-
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(255, 255, 255)
-        doc.text(formatCurrency(calculateJobValue(job)), W - 16, y, { align: 'right' })
-        doc.setFont('helvetica', 'normal')
-
-        if (i < filtered.length - 1) {
-          doc.setDrawColor(42, 42, 42)
-          doc.setLineWidth(0.2)
-          doc.line(16, y + 3, W - 16, y + 3)
-        }
-        y += 10
-      })
-
-      // Linha total
-      y += 2
-      doc.setDrawColor(183, 40, 24)
-      doc.setLineWidth(0.4)
-      doc.line(10, y, W - 10, y)
-      y += 8
-      doc.setFontSize(11)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(229, 50, 30)
-      doc.text('TOTAL', 16, y)
-      doc.text(formatCurrency(totalValue), W - 16, y, { align: 'right' })
-      y += 16
-
-      // Botão / link da fatura
+      // Adicionar link clicável sobre o botão "Acessar fatura"
+      // PDF é 1920x1080 pts. Botão está ~14% da esquerda, ~42% do topo, ~24% largo, ~7% alto
+      // pdf-lib usa y=0 na base, então invertemos: y = height - top - btnH
       if (faturaUrl) {
-        doc.setFillColor(183, 40, 24)
-        doc.roundedRect(14, y, 80, 12, 3, 3, 'F')
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(255, 255, 255)
-        doc.textWithLink('Acessar fatura online', 54, y + 7.5, { url: faturaUrl, align: 'center' })
-        y += 20
+        const btnX = width * 0.14
+        const btnW = width * 0.24
+        const btnH = height * 0.075
+        const btnY = height - (height * 0.42) - btnH
+
+        const linkDict = pdfDoc.context.obj({
+          Type: 'Annot',
+          Subtype: 'Link',
+          Rect: [btnX, btnY, btnX + btnW, btnY + btnH],
+          Border: [0, 0, 0],
+          A: pdfDoc.context.obj({
+            Type: 'Action',
+            S: 'URI',
+            URI: PDFString.of(faturaUrl),
+          }),
+        })
+        const linkRef = pdfDoc.context.register(linkDict)
+        const annots = pdfDoc.context.obj([linkRef])
+        page.node.set(PDFName.of('Annots'), annots)
       }
 
-      // Seção Pix
-      if (qrDataUrl && settings?.pix_key) {
-        doc.setFillColor(26, 26, 26)
-        doc.roundedRect(10, y, W - 20, 48, 3, 3, 'F')
+      const pdfBytes = await pdfDoc.save()
+      const blob = new Blob([pdfBytes as unknown as ArrayBuffer], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fatura-${clientName.toLowerCase().replace(/\s+/g, '-')}-${getMonthName(month).toLowerCase()}-${year}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
 
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(255, 255, 255)
-        doc.text('Pagamento via Pix', 16, y + 10)
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8.5)
-        doc.setTextColor(170, 170, 170)
-        doc.text(`Chave: `, 16, y + 20)
-        doc.setTextColor(255, 255, 255)
-        doc.text(settings.pix_key, 30, y + 20)
-
-        if (settings.payment_link) {
-          doc.setTextColor(229, 50, 30)
-          doc.textWithLink('Link de pagamento', 16, y + 30, { url: settings.payment_link })
-        }
-
-        doc.addImage(qrDataUrl, 'PNG', W - 54, y + 4, 40, 40)
-        y += 56
-      }
-
-      // Rodapé
-      doc.setFontSize(8)
-      doc.setTextColor(68, 68, 68)
-      doc.text(
-        `${settings?.company_name || 'Jota Agência'}  ·  Emitido em ${new Date().toLocaleDateString('pt-BR')}`,
-        W / 2, H - 10, { align: 'center' }
-      )
-
-      doc.save(`fatura-${clientName.toLowerCase().replace(/\s+/g, '-')}-${getMonthName(month).toLowerCase()}-${year}.pdf`)
       if (faturaUrl) {
         toast.success('PDF exportado com link da fatura!')
       } else {
