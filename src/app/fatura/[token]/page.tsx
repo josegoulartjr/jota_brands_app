@@ -111,7 +111,7 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
           </table>
 
           <div style={{ borderTop: '1px solid #2a2a2a', padding: '24px 28px', display: 'flex', justifyContent: 'center' }}>
-              <img src="/qr-code.png" alt="QR Code Pix" width={180} height={180}
+              <img src="/qr-code.png" alt="QR Code Pix" width={340} height={340}
                 style={{ borderRadius: 8, background: '#fff', padding: 8 }} />
             </div>
         </div>
