@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { FileText, Download, ExternalLink, QrCode } from 'lucide-react'
+import { Download, ExternalLink, QrCode, Link, Copy, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -23,6 +23,8 @@ export default function RelatorioPage() {
   const [year, setYear] = useState(CURRENT_YEAR)
   const [filterClient, setFilterClient] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const [faturaLink, setFaturaLink] = useState<string>('')
+  const [copied, setCopied] = useState(false)
   const qrRef = useRef<HTMLCanvasElement>(null)
 
   const load = useCallback(async () => {
@@ -105,30 +107,72 @@ export default function RelatorioPage() {
     return payload + '6304' + (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0')
   }
 
+  async function gerarLink() {
+    if (filtered.length === 0) return toast.error('Nenhum job neste período')
+    try {
+      const invoiceQuery = supabase.from('invoices').select('token').eq('month', month).eq('year', year)
+      const existing = await (filterClient
+        ? invoiceQuery.eq('client_id', filterClient)
+        : invoiceQuery.is('client_id', null)
+      ).maybeSingle()
+
+      let token = existing.data?.token
+      if (!token) {
+        const { data: inv, error } = await supabase
+          .from('invoices')
+          .insert({ client_id: filterClient || null, month, year })
+          .select('token')
+          .single()
+        if (error) { toast.error('Erro ao gerar link: ' + error.message); return }
+        token = inv?.token
+      }
+      if (token) {
+        const url = `${window.location.origin}/fatura/${token}`
+        setFaturaLink(url)
+        toast.success('Link gerado!')
+      }
+    } catch (e: any) {
+      toast.error('Erro: ' + e.message)
+    }
+  }
+
   async function exportPDF() {
     if (filtered.length === 0) return toast.error('Nenhum job para exportar')
     try {
-      // Gerar token da fatura (upsert por client+month+year)
+      // Gerar token da fatura (upsert por client+month+year, client pode ser null = todos)
       let faturaUrl = ''
-      if (filterClient) {
-        const existing = await supabase
-          .from('invoices')
-          .select('token')
-          .eq('client_id', filterClient)
-          .eq('month', month)
-          .eq('year', year)
-          .maybeSingle()
+      const invoiceQuery = supabase
+        .from('invoices')
+        .select('token')
+        .eq('month', month)
+        .eq('year', year)
 
-        let token = existing.data?.token
-        if (!token) {
-          const { data: inv } = await supabase
-            .from('invoices')
-            .insert({ client_id: filterClient, month, year })
-            .select('token')
-            .single()
-          token = inv?.token
-        }
-        if (token) faturaUrl = `${window.location.origin}/fatura/${token}`
+      const existing = await (filterClient
+        ? invoiceQuery.eq('client_id', filterClient)
+        : invoiceQuery.is('client_id', null)
+      ).maybeSingle()
+
+      let token = existing.data?.token
+      if (!token) {
+        const { data: inv } = await supabase
+          .from('invoices')
+          .insert({ client_id: filterClient || null, month, year })
+          .select('token')
+          .single()
+        token = inv?.token
+      }
+      if (token) {
+        faturaUrl = `${window.location.origin}/fatura/${token}`
+        // Mostrar link na tela para fácil acesso
+        toast((t) => (
+          <div>
+            <p style={{ marginBottom: 4, fontWeight: 600 }}>Link da fatura gerado:</p>
+            <a href={faturaUrl} target="_blank" rel="noopener noreferrer"
+              style={{ color: '#E5321E', fontSize: 12, wordBreak: 'break-all' }}>
+              {faturaUrl}
+            </a>
+          </div>
+        ), { duration: 15000 })
       }
 
       const { PDFDocument, PDFName, PDFString } = await import('pdf-lib')
@@ -195,9 +239,14 @@ export default function RelatorioPage() {
           <h1 className="text-2xl font-bold text-white">Relatório Mensal</h1>
           <p className="text-zinc-400 text-sm mt-0.5">Exporte recibos com QR Code Pix</p>
         </div>
-        <Button onClick={exportPDF} disabled={filtered.length === 0}>
-          <Download size={16} /> Exportar PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={gerarLink} disabled={filtered.length === 0}>
+            <Link size={16} /> Gerar Link
+          </Button>
+          <Button onClick={exportPDF} disabled={filtered.length === 0}>
+            <Download size={16} /> Exportar PDF
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -213,6 +262,21 @@ export default function RelatorioPage() {
           {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
       </div>
+
+      {/* Link da fatura */}
+      {faturaLink && (
+        <div className="flex items-center gap-3 mb-4 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3">
+          <ExternalLink size={14} className="text-red-500 shrink-0" />
+          <a href={faturaLink} target="_blank" rel="noopener noreferrer"
+            className="text-red-400 text-sm hover:underline truncate flex-1">
+            {faturaLink}
+          </a>
+          <button onClick={() => { navigator.clipboard.writeText(faturaLink); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+            className="text-zinc-400 hover:text-white shrink-0">
+            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+          </button>
+        </div>
+      )}
 
       {/* Preview do relatório */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

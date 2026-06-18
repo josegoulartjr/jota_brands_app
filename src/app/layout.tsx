@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { Sidebar } from '@/components/layout/sidebar'
+import { ConditionalSidebar } from '@/components/layout/conditional-sidebar'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className="h-full">
       <body className="flex h-screen overflow-hidden" style={{ backgroundColor: '#111111' }}>
-        <Sidebar />
+        <ConditionalSidebar />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
