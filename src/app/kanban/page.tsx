@@ -324,7 +324,7 @@ export default function KanbanPage() {
     if (selected.some(t => !t.client_id)) return toast.error('Atribua um cliente a todos os jobs selecionados')
     const inserts = selected.map(t => ({
       name: t.name, clickup_url: t.url, client_id: t.client_id,
-      status: 'aprovacao', period_month: new Date().getMonth() + 1, period_year: CURRENT_YEAR,
+      status: 'concluido', period_month: new Date().getMonth() + 1, period_year: CURRENT_YEAR,
       type: 'fechado' as const, hourly_rate: settings?.hourly_rate || 40,
     }))
     const { error } = await supabase.from('jobs').insert(inserts)
