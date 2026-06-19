@@ -146,7 +146,7 @@ export default function KanbanPage() {
 
   // ClickUp staging modal
   const [stageModal, setStageModal] = useState(false)
-  const [stageTasks, setStageTasks] = useState<{ name: string; url: string; client_id: string }[]>([])
+  const [stageTasks, setStageTasks] = useState<{ name: string; url: string; client_id: string; selected: boolean }[]>([])
 
   // Import by link
   const [linkModal, setLinkModal] = useState(false)
@@ -287,7 +287,7 @@ export default function KanbanPage() {
       const newTasks = tasks.filter(t => !existingUrls.has(t.url))
       if (!newTasks.length) { toast('Todas as tarefas já foram importadas'); setSyncing(false); return }
       // Show staging modal
-      setStageTasks(newTasks.map(t => ({ name: t.name, url: t.url, client_id: clients[0]?.id || '' })))
+      setStageTasks(newTasks.map(t => ({ name: t.name, url: t.url, client_id: clients[0]?.id || '', selected: true })))
       setStageModal(true)
     } catch (e: any) {
       toast.error(e.message)
@@ -308,7 +308,7 @@ export default function KanbanPage() {
       const existingUrl = jobs.find(j => j.clickup_url === task.url)
       if (existingUrl) { toast('Este card já foi importado'); setLinkLoading(false); return }
       // Abre staging com o task único
-      setStageTasks([{ name: task.name, url: task.url, client_id: clients[0]?.id || '' }])
+      setStageTasks([{ name: task.name, url: task.url, client_id: clients[0]?.id || '', selected: true }])
       setStageModal(true)
       setLinkModal(false)
       setLinkInput('')
@@ -319,8 +319,10 @@ export default function KanbanPage() {
   }
 
   async function confirmImport() {
-    if (stageTasks.some(t => !t.client_id)) return toast.error('Atribua um cliente a todos os jobs')
-    const inserts = stageTasks.map(t => ({
+    const selected = stageTasks.filter(t => t.selected)
+    if (!selected.length) return toast.error('Selecione ao menos um job para importar')
+    if (selected.some(t => !t.client_id)) return toast.error('Atribua um cliente a todos os jobs selecionados')
+    const inserts = selected.map(t => ({
       name: t.name, clickup_url: t.url, client_id: t.client_id,
       status: 'aprovacao', period_month: new Date().getMonth() + 1, period_year: CURRENT_YEAR,
       type: 'fechado' as const, hourly_rate: settings?.hourly_rate || 40,
@@ -328,6 +330,7 @@ export default function KanbanPage() {
     const { error } = await supabase.from('jobs').insert(inserts)
     if (error) return toast.error('Erro ao importar: ' + error.message)
     toast.success(`${inserts.length} job${inserts.length !== 1 ? 's' : ''} importado${inserts.length !== 1 ? 's' : ''}!`)
+
     setStageModal(false)
     loadData()
   }
@@ -566,10 +569,16 @@ export default function KanbanPage() {
       {/* ---- Staging Modal ---- */}
       <Modal open={stageModal} onClose={() => setStageModal(false)} title="Importar do ClickUp" className="max-w-2xl">
         <div className="space-y-4">
-          <p className="text-zinc-400 text-sm">{stageTasks.length} tarefa{stageTasks.length !== 1 ? 's' : ''} em APROVAÇÃO. Atribua um cliente a cada uma:</p>
+          <p className="text-zinc-400 text-sm">Selecione as tarefas que deseja importar e atribua um cliente:</p>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {stageTasks.map((t, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: '#1A1A1A', border: '1px solid #2E2E2E' }}>
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: t.selected ? '#1A1A1A' : '#141414', border: `1px solid ${t.selected ? '#2E2E2E' : '#1e1e1e'}`, opacity: t.selected ? 1 : 0.5 }}>
+                <input
+                  type="checkbox"
+                  checked={t.selected}
+                  onChange={e => setStageTasks(prev => prev.map((x, j) => j === i ? { ...x, selected: e.target.checked } : x))}
+                  style={{ width: 16, height: 16, accentColor: '#E5321E', cursor: 'pointer', flexShrink: 0 }}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">{t.name}</p>
                   {t.url && (
@@ -578,20 +587,24 @@ export default function KanbanPage() {
                     </a>
                   )}
                 </div>
-                <Select
-                  className="w-40"
-                  value={t.client_id}
-                  onChange={e => setStageTasks(prev => prev.map((x, j) => j === i ? { ...x, client_id: e.target.value } : x))}
-                >
-                  <option value="">Cliente...</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </Select>
+                {t.selected && (
+                  <Select
+                    className="w-40"
+                    value={t.client_id}
+                    onChange={e => setStageTasks(prev => prev.map((x, j) => j === i ? { ...x, client_id: e.target.value } : x))}
+                  >
+                    <option value="">Cliente...</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </Select>
+                )}
               </div>
             ))}
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => setStageModal(false)}><X size={15} />Cancelar</Button>
-            <Button onClick={confirmImport}><Check size={15} />Importar {stageTasks.length} job{stageTasks.length !== 1 ? 's' : ''}</Button>
+            <Button onClick={confirmImport} disabled={!stageTasks.some(t => t.selected)}>
+              <Check size={15} />Importar {stageTasks.filter(t => t.selected).length} job{stageTasks.filter(t => t.selected).length !== 1 ? 's' : ''}
+            </Button>
           </div>
         </div>
       </Modal>
