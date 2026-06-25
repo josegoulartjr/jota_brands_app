@@ -1,0 +1,17 @@
+{
+  "name": "Jota Brands — Financeiro",
+  "short_name": "Jota Brands",
+  "description": "Gestão de jobs e finanças da Jota Brands",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
