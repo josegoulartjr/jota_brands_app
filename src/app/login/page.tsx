@@ -73,7 +73,7 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className="mt-2 rounded-lg py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
-            style={{ backgroundColor: '#6366f1' }}
+            style={{ backgroundColor: '#B72818' }}
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
