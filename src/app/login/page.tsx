@@ -46,7 +46,7 @@ export default function LoginPage() {
               required
               autoComplete="email"
               className="rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2"
-              style={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a', focusRingColor: '#6366f1' }}
+              style={{ backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a' }}
               placeholder="seu@email.com"
             />
           </div>
