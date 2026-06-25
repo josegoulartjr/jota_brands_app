@@ -6,6 +6,9 @@ import { Toaster } from 'react-hot-toast'
 export const metadata: Metadata = {
   title: 'Jota Brands — Financeiro',
   description: 'Gestão financeira da agência',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
