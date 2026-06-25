@@ -1,9 +1,10 @@
 'use client'
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Briefcase, Users, FileText, TrendingUp, Settings, Kanban } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { LayoutDashboard, Briefcase, Users, FileText, TrendingUp, Settings, Kanban, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 
 const nav = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,6 +18,12 @@ const nav = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <aside className="w-16 lg:w-56 flex flex-col py-5 shrink-0" style={{ backgroundColor: '#1C1C1C', borderRight: '1px solid #2A2A2A' }}>
@@ -54,8 +61,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="px-4 hidden lg:block">
-        <p className="text-xs" style={{ color: '#444' }}>v1.0.0</p>
+      <div className="px-2 mt-2 space-y-2">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-all duration-150 hover:bg-white/5"
+          style={{ color: '#888' }}
+        >
+          <LogOut size={17} className="shrink-0" />
+          <span className="hidden lg:block">Sair</span>
+        </button>
+        <div className="px-2 hidden lg:block">
+          <p className="text-xs" style={{ color: '#444' }}>v1.0.0</p>
+        </div>
       </div>
     </aside>
   )

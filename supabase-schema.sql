@@ -69,3 +69,37 @@ CREATE INDEX IF NOT EXISTS idx_jobs_period ON jobs(period_year, period_month);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+
+-- ============================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================
+
+ALTER TABLE public.clients      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.jobs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings     ENABLE ROW LEVEL SECURITY;
+
+-- Acesso total para usuários autenticados (app interno da agência)
+CREATE POLICY "Authenticated can do everything on clients"
+  ON public.clients FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Authenticated can do everything on jobs"
+  ON public.jobs FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Authenticated can do everything on transactions"
+  ON public.transactions FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Authenticated can do everything on settings"
+  ON public.settings FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
