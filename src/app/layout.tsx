@@ -7,7 +7,10 @@ export const metadata: Metadata = {
   title: 'Jota Brands — Financeiro',
   description: 'Gestão financeira da agência',
   icons: {
-    icon: '/favicon.svg',
+    icon: [
+      { url: '/favicon.ico', sizes: '256x256', type: 'image/x-icon' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
   },
   manifest: '/manifest.json',
 }
