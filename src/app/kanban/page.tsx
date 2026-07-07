@@ -47,8 +47,14 @@ function emptyForm(status = 'concluido'): JobForm {
 
 // -------- Card --------
 function JobCard({
-  job, index, onEdit, onDelete,
-}: { job: JobWithClient; index: number; onEdit: (j: JobWithClient) => void; onDelete: (id: string) => void }) {
+  job, index, onEdit, onDelete, selected, onSelect,
+}: {
+  job: JobWithClient; index: number
+  onEdit: (j: JobWithClient) => void
+  onDelete: (id: string) => void
+  selected: boolean
+  onSelect: (id: string, value: boolean) => void
+}) {
   const value = calculateJobValue(job)
   const sb = STATUS_BADGE[job.status]
   return (
@@ -61,18 +67,30 @@ function JobCard({
           onClick={() => onEdit(job)}
           className="rounded-xl p-4 cursor-pointer select-none transition-shadow"
           style={{
-            backgroundColor: snapshot.isDragging ? '#2A2A2A' : '#1E1E1E',
-            border: '1px solid #2E2E2E',
+            backgroundColor: snapshot.isDragging ? '#2A2A2A' : selected ? '#221010' : '#1E1E1E',
+            border: selected ? '1px solid #B72818' : '1px solid #2E2E2E',
             boxShadow: snapshot.isDragging ? '0 8px 24px rgba(0,0,0,0.5)' : undefined,
             marginBottom: 8,
             ...provided.draggableProps.style,
           }}
         >
-          {/* Título */}
-          <p className="text-white text-sm font-semibold leading-snug mb-2">{job.name}</p>
+          {/* Título com checkbox */}
+          <div className="flex items-start gap-2 mb-2">
+            <div
+              onClick={e => { e.stopPropagation(); onSelect(job.id, !selected) }}
+              className="shrink-0 w-4 h-4 mt-0.5 rounded flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                backgroundColor: selected ? '#B72818' : 'transparent',
+                border: selected ? '1.5px solid #B72818' : '1.5px solid #555',
+              }}
+            >
+              {selected && <Check size={10} className="text-white" strokeWidth={3} />}
+            </div>
+            <p className="text-white text-sm font-semibold leading-snug">{job.name}</p>
+          </div>
 
           {/* Tags */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
+          <div className="flex flex-wrap gap-1.5 mb-3 pl-6">
             {job.client && <Badge color={job.client.color}>{job.client.name}</Badge>}
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
@@ -83,7 +101,7 @@ function JobCard({
           </div>
 
           {/* Info row */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pl-6">
             <div className="flex items-center gap-3 text-xs" style={{ color: '#888' }}>
               <span>{getMonthName(job.period_month)}/{job.period_year}</span>
               {job.type === 'hora' ? (
@@ -131,6 +149,9 @@ export default function KanbanPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Edit modal
   const [editModal, setEditModal] = useState(false)
@@ -183,6 +204,36 @@ export default function KanbanPage() {
       if ((c.statuses as readonly string[]).includes(job.status)) return k as ColKey
     }
     return 'backlog'
+  }
+
+  function toggleSelect(id: string, value: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (value) next.add(id); else next.delete(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll(col: ColKey) {
+    const ids = colJobs(col).map(j => j.id)
+    const allSelected = ids.length > 0 && ids.every(id => selectedIds.has(id))
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allSelected) ids.forEach(id => next.delete(id))
+      else ids.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  async function bulkMove(targetCol: ColKey) {
+    if (!selectedIds.size) return
+    const newStatus = COLUMNS[targetCol].targetStatus
+    const ids = Array.from(selectedIds)
+    setJobs(prev => prev.map(j => selectedIds.has(j.id) ? { ...j, status: newStatus } : j))
+    setSelectedIds(new Set())
+    const { error } = await supabase.from('jobs').update({ status: newStatus }).in('id', ids)
+    if (error) { toast.error('Erro ao mover'); loadData() }
+    else toast.success(`${ids.length} job${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para ${COLUMNS[targetCol].label}`)
   }
 
   async function onDragEnd(result: DropResult) {
@@ -286,7 +337,6 @@ export default function KanbanPage() {
       const existingUrls = new Set(jobs.map(j => j.clickup_url).filter(Boolean))
       const newTasks = tasks.filter(t => !existingUrls.has(t.url))
       if (!newTasks.length) { toast('Todas as tarefas já foram importadas'); setSyncing(false); return }
-      // Show staging modal
       setStageTasks(newTasks.map(t => ({ name: t.name, url: t.url, client_id: clients[0]?.id || '', selected: true })))
       setStageModal(true)
     } catch (e: any) {
@@ -307,7 +357,6 @@ export default function KanbanPage() {
       const task = data.task
       const existingUrl = jobs.find(j => j.clickup_url === task.url)
       if (existingUrl) { toast('Este card já foi importado'); setLinkLoading(false); return }
-      // Abre staging com o task único
       setStageTasks([{ name: task.name, url: task.url, client_id: clients[0]?.id || '', selected: true }])
       setStageModal(true)
       setLinkModal(false)
@@ -330,7 +379,6 @@ export default function KanbanPage() {
     const { error } = await supabase.from('jobs').insert(inserts)
     if (error) return toast.error('Erro ao importar: ' + error.message)
     toast.success(`${inserts.length} job${inserts.length !== 1 ? 's' : ''} importado${inserts.length !== 1 ? 's' : ''}!`)
-
     setStageModal(false)
     loadData()
   }
@@ -343,7 +391,7 @@ export default function KanbanPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Kanban</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">Arraste os cards entre as colunas</p>
+          <p className="text-zinc-400 text-sm mt-0.5">Arraste os cards ou selecione para mover em grupo</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -367,64 +415,126 @@ export default function KanbanPage() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-zinc-500">Carregando...</div>
       ) : (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-4 flex-1 overflow-x-auto pb-4">
-            {(Object.entries(COLUMNS) as [ColKey, typeof COLUMNS[ColKey]][]).map(([key, col]) => {
-              const colItems = colJobs(key)
-              const total = totalByCol(key)
-              return (
-                <div key={key} className="flex flex-col w-80 shrink-0">
-                  {/* Column header */}
-                  <div
-                    className="flex items-center justify-between px-4 py-3 rounded-t-xl"
-                    style={{ backgroundColor: `${col.accent}22`, borderBottom: `2px solid ${col.accent}` }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-semibold text-sm">{col.label}</span>
-                      <span
-                        className="text-xs font-bold px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: `${col.accent}33`, color: col.accent }}
-                      >
-                        {colItems.length}
-                      </span>
-                    </div>
-                    {total > 0 && (
-                      <span className="text-xs font-medium" style={{ color: col.accent }}>
-                        {formatCurrency(total)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Droppable */}
-                  <Droppable droppableId={key}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className="flex-1 p-2 rounded-b-xl min-h-32 overflow-y-auto"
-                        style={{
-                          backgroundColor: snapshot.isDraggingOver ? '#1F1F1F' : '#161616',
-                          border: `1px solid ${snapshot.isDraggingOver ? col.accent : '#222'}`,
-                          borderTop: 'none',
-                          transition: 'background-color 0.15s',
-                          maxHeight: 'calc(100vh - 220px)',
-                        }}
-                      >
-                        {colItems.length === 0 && !snapshot.isDraggingOver && (
-                          <p className="text-center text-zinc-600 text-xs py-8">Sem jobs aqui</p>
-                        )}
-                        {colItems.map((job, index) => (
-                          <JobCard key={job.id} job={job} index={index} onEdit={openEdit} onDelete={handleDelete} />
-                        ))}
-                        {provided.placeholder}
+        <>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-4 flex-1 overflow-x-auto pb-2">
+              {(Object.entries(COLUMNS) as [ColKey, typeof COLUMNS[ColKey]][]).map(([key, col]) => {
+                const colItems = colJobs(key)
+                const total = totalByCol(key)
+                const allColSelected = colItems.length > 0 && colItems.every(j => selectedIds.has(j.id))
+                const someColSelected = colItems.some(j => selectedIds.has(j.id))
+                return (
+                  <div key={key} className="flex flex-col w-80 shrink-0">
+                    {/* Column header */}
+                    <div
+                      className="flex items-center justify-between px-4 py-3 rounded-t-xl"
+                      style={{ backgroundColor: `${col.accent}22`, borderBottom: `2px solid ${col.accent}` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {/* Select-all checkbox */}
+                        <div
+                          onClick={() => toggleSelectAll(key)}
+                          className="w-4 h-4 rounded flex items-center justify-center cursor-pointer transition-all shrink-0"
+                          title={allColSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                          style={{
+                            backgroundColor: allColSelected ? col.accent : someColSelected ? `${col.accent}55` : 'transparent',
+                            border: `1.5px solid ${allColSelected || someColSelected ? col.accent : '#555'}`,
+                          }}
+                        >
+                          {allColSelected && <Check size={10} className="text-white" strokeWidth={3} />}
+                          {!allColSelected && someColSelected && <div className="w-2 h-0.5 rounded" style={{ backgroundColor: col.accent }} />}
+                        </div>
+                        <span className="text-white font-semibold text-sm">{col.label}</span>
+                        <span
+                          className="text-xs font-bold px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: `${col.accent}33`, color: col.accent }}
+                        >
+                          {colItems.length}
+                        </span>
                       </div>
-                    )}
-                  </Droppable>
-                </div>
-              )
-            })}
-          </div>
-        </DragDropContext>
+                      {total > 0 && (
+                        <span className="text-xs font-medium" style={{ color: col.accent }}>
+                          {formatCurrency(total)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Droppable */}
+                    <Droppable droppableId={key}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className="flex-1 p-2 rounded-b-xl min-h-32 overflow-y-auto"
+                          style={{
+                            backgroundColor: snapshot.isDraggingOver ? '#1F1F1F' : '#161616',
+                            border: `1px solid ${snapshot.isDraggingOver ? col.accent : '#222'}`,
+                            borderTop: 'none',
+                            transition: 'background-color 0.15s',
+                            maxHeight: 'calc(100vh - 260px)',
+                          }}
+                        >
+                          {colItems.length === 0 && !snapshot.isDraggingOver && (
+                            <p className="text-center text-zinc-600 text-xs py-8">Sem jobs aqui</p>
+                          )}
+                          {colItems.map((job, index) => (
+                            <JobCard
+                              key={job.id}
+                              job={job}
+                              index={index}
+                              onEdit={openEdit}
+                              onDelete={handleDelete}
+                              selected={selectedIds.has(job.id)}
+                              onSelect={toggleSelect}
+                            />
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                )
+              })}
+            </div>
+          </DragDropContext>
+
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-xl mt-3 shrink-0"
+              style={{ backgroundColor: '#1C1C1C', border: '1px solid #2E2E2E' }}
+            >
+              <span className="text-white text-sm font-semibold">
+                {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+              </span>
+              <span style={{ color: '#333' }}>|</span>
+              <span className="text-zinc-400 text-sm">Mover para:</span>
+              {(Object.entries(COLUMNS) as [ColKey, typeof COLUMNS[ColKey]][]).map(([key, col]) => (
+                <button
+                  key={key}
+                  onClick={() => bulkMove(key)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                  style={{
+                    backgroundColor: `${col.accent}25`,
+                    color: col.accent,
+                    border: `1px solid ${col.accent}55`,
+                  }}
+                >
+                  {col.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="ml-auto flex items-center gap-1 text-xs transition-colors"
+                style={{ color: '#666' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#aaa')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#666')}
+              >
+                <X size={13} /> Cancelar seleção
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ---- Edit Modal ---- */}
