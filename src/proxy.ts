@@ -27,8 +27,9 @@ export async function proxy(request: NextRequest) {
 
   const isLoginPage = request.nextUrl.pathname === '/login'
   const isPublicRoute = request.nextUrl.pathname.startsWith('/fatura')
+  const isPwaAsset = ['/manifest.json', '/sw.js', '/offline.html'].includes(request.nextUrl.pathname)
 
-  if (!user && !isLoginPage && !isPublicRoute) {
+  if (!user && !isLoginPage && !isPublicRoute && !isPwaAsset) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -40,5 +41,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|pdf)$).*)'],
 }
