@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/modal'
 import { formatCurrency, formatDate, MONTHS } from '@/lib/utils'
 import type { Transaction, Client } from '@/types/database'
 import toast from 'react-hot-toast'
+import { notifyPush } from '@/lib/push'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -165,7 +166,15 @@ export default function FinanceiroPage() {
       ? await supabase.from('transactions').update(payload).eq('id', editing.id)
       : await supabase.from('transactions').insert(payload)
     if (error) toast.error('Erro ao salvar')
-    else { toast.success(editing ? 'Atualizado!' : 'Lançamento criado!'); setModalOpen(false); load() }
+    else {
+      toast.success(editing ? 'Atualizado!' : 'Lançamento criado!')
+      setModalOpen(false)
+      load()
+      if (!editing) {
+        const sign = payload.type === 'entrada' ? '+' : '-'
+        notifyPush('Novo lançamento financeiro', `${sign}${formatCurrency(payload.amount)} — ${payload.description}`)
+      }
+    }
     setSaving(false)
   }
 

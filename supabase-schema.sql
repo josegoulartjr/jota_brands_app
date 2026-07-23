@@ -63,12 +63,23 @@ ON CONFLICT DO NOTHING;
 --   ('Cliente B', '#f59e0b'),
 --   ('Cliente C', '#10b981');
 
+-- Tabela de inscrições de push notification (Web Push)
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Índices para performance
 CREATE INDEX IF NOT EXISTS idx_jobs_client_id ON jobs(client_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_period ON jobs(period_year, period_month);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
 
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
@@ -78,6 +89,7 @@ ALTER TABLE public.clients      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.jobs         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Acesso total para usuários autenticados (app interno da agência)
 CREATE POLICY "Authenticated can do everything on clients"
@@ -103,3 +115,21 @@ CREATE POLICY "Authenticated can do everything on settings"
   TO authenticated
   USING (true)
   WITH CHECK (true);
+
+-- push_subscriptions: cada usuário só gerencia a própria inscrição,
+-- mas qualquer autenticado pode ler todas (necessário para o envio
+-- de notificações em grupo, ex: "job mudou de status").
+CREATE POLICY "Authenticated can read all push subscriptions"
+  ON public.push_subscriptions FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Users manage their own push subscription"
+  ON public.push_subscriptions FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users delete their own push subscription"
+  ON public.push_subscriptions FOR DELETE
+  TO authenticated
+  USING (auth.uid() = user_id);

@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Save, QrCode, Plug } from 'lucide-react'
+import { Save, QrCode, Plug, Bell, BellOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import type { Settings } from '@/types/database'
 import toast from 'react-hot-toast'
+import { isPushSupported, getPushSubscription, subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 
 export default function ConfiguracoesPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -20,6 +21,35 @@ export default function ConfiguracoesPage() {
   })
   const [saving, setSaving] = useState(false)
   const [qrUrl, setQrUrl] = useState('')
+
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+
+  useEffect(() => {
+    setPushSupported(isPushSupported())
+    if (isPushSupported()) {
+      getPushSubscription().then(sub => setPushEnabled(!!sub))
+    }
+  }, [])
+
+  async function togglePush() {
+    setPushLoading(true)
+    try {
+      if (pushEnabled) {
+        await unsubscribeFromPush()
+        setPushEnabled(false)
+        toast.success('Notificações desativadas')
+      } else {
+        await subscribeToPush()
+        setPushEnabled(true)
+        toast.success('Notificações ativadas!')
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao configurar notificações')
+    }
+    setPushLoading(false)
+  }
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('settings').select('*').limit(1).single()
@@ -170,6 +200,33 @@ export default function ConfiguracoesPage() {
             />
             <p className="text-zinc-600 text-xs mt-1">ClickUp → Settings → Apps → API Token</p>
           </div>
+        </div>
+
+        <hr className="border-zinc-800" />
+
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Bell size={16} style={{ color: '#B72818' }} />
+            <h3 className="text-white font-medium text-sm">Notificações Push</h3>
+          </div>
+          {!pushSupported ? (
+            <p className="text-zinc-500 text-xs">Seu navegador não suporta notificações push.</p>
+          ) : (
+            <div className="flex items-center justify-between bg-zinc-800/50 rounded-xl p-4">
+              <div>
+                <p className="text-white text-sm font-medium">
+                  {pushEnabled ? 'Notificações ativadas' : 'Receber notificações neste dispositivo'}
+                </p>
+                <p className="text-zinc-500 text-xs mt-0.5">
+                  Avisos de mudança de status de job, novos lançamentos e faturas geradas
+                </p>
+              </div>
+              <Button onClick={togglePush} disabled={pushLoading} variant={pushEnabled ? 'outline' : 'default'} size="sm">
+                {pushEnabled ? <BellOff size={14} /> : <Bell size={14} />}
+                {pushLoading ? '...' : pushEnabled ? 'Desativar' : 'Ativar'}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="pt-2">

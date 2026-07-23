@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
 import type { Job, Client, Settings } from '@/types/database'
 import toast from 'react-hot-toast'
+import { notifyPush } from '@/lib/push'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
@@ -233,7 +234,10 @@ export default function KanbanPage() {
     setSelectedIds(new Set())
     const { error } = await supabase.from('jobs').update({ status: newStatus }).in('id', ids)
     if (error) { toast.error('Erro ao mover'); loadData() }
-    else toast.success(`${ids.length} job${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para ${COLUMNS[targetCol].label}`)
+    else {
+      toast.success(`${ids.length} job${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para ${COLUMNS[targetCol].label}`)
+      notifyPush('Jobs atualizados', `${ids.length} job${ids.length !== 1 ? 's' : ''} movido${ids.length !== 1 ? 's' : ''} para ${COLUMNS[targetCol].label}`)
+    }
   }
 
   async function onDragEnd(result: DropResult) {
@@ -246,7 +250,10 @@ export default function KanbanPage() {
     setJobs(prev => prev.map(j => j.id === draggableId ? { ...j, status: newStatus } : j))
     const { error } = await supabase.from('jobs').update({ status: newStatus }).eq('id', draggableId)
     if (error) { toast.error('Erro ao mover'); loadData() }
-    else toast.success(`Movido para ${COLUMNS[dest].label}`)
+    else {
+      toast.success(`Movido para ${COLUMNS[dest].label}`)
+      notifyPush('Job atualizado', `"${job.name}" movido para ${COLUMNS[dest].label}`)
+    }
   }
 
   function openEdit(job: JobWithClient) {
@@ -282,11 +289,19 @@ export default function KanbanPage() {
       clickup_url: form.clickup_url.trim() || null,
       status: form.status, notes: form.notes.trim() || null,
     }
+    const statusChanged = editingJob && editingJob.status !== payload.status
     const { error } = editingJob
       ? await supabase.from('jobs').update(payload).eq('id', editingJob.id)
       : await supabase.from('jobs').insert(payload)
     if (error) toast.error('Erro ao salvar')
-    else { toast.success('Job salvo!'); setEditModal(false); loadData() }
+    else {
+      toast.success('Job salvo!')
+      setEditModal(false)
+      loadData()
+      if (statusChanged) {
+        notifyPush('Job atualizado', `"${payload.name}" mudou para ${STATUS_BADGE[payload.status]?.label || payload.status}`)
+      }
+    }
     setSaving(false)
   }
 

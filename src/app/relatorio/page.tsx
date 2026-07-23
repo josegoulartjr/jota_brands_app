@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
 import type { Job, Client, Settings } from '@/types/database'
 import toast from 'react-hot-toast'
+import { notifyPush } from '@/lib/push'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
@@ -117,6 +118,7 @@ export default function RelatorioPage() {
       ).maybeSingle()
 
       let token = existing.data?.token
+      let isNew = false
       if (!token) {
         const { data: inv, error } = await supabase
           .from('invoices')
@@ -125,11 +127,16 @@ export default function RelatorioPage() {
           .single()
         if (error) { toast.error('Erro ao gerar link: ' + error.message); return }
         token = inv?.token
+        isNew = true
       }
       if (token) {
         const url = `${window.location.origin}/fatura/${token}`
         setFaturaLink(url)
         toast.success('Link gerado!')
+        if (isNew) {
+          const clientName = clients.find(c => c.id === filterClient)?.name || 'todos os clientes'
+          notifyPush('Fatura gerada', `Nova fatura de ${getMonthName(month)}/${year} — ${clientName}`)
+        }
       }
     } catch (e: any) {
       toast.error('Erro: ' + e.message)
@@ -153,6 +160,7 @@ export default function RelatorioPage() {
       ).maybeSingle()
 
       let token = existing.data?.token
+      let isNew = false
       if (!token) {
         const { data: inv } = await supabase
           .from('invoices')
@@ -160,9 +168,13 @@ export default function RelatorioPage() {
           .select('token')
           .single()
         token = inv?.token
+        isNew = true
       }
       if (token) {
         faturaUrl = `${window.location.origin}/fatura/${token}`
+        if (isNew) {
+          notifyPush('Fatura gerada', `Nova fatura de ${getMonthName(month)}/${year} — ${clients.find(c => c.id === filterClient)?.name || 'todos os clientes'}`)
+        }
         // Mostrar link na tela para fácil acesso
         toast((t) => (
           <div>

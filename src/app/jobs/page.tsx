@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
 import type { Job, Client } from '@/types/database'
 import toast from 'react-hot-toast'
+import { notifyPush } from '@/lib/push'
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   concluido: { label: 'Backlog',   color: '#888888' },
@@ -133,6 +134,7 @@ export default function JobsPage() {
       notes: form.notes.trim() || null,
     }
 
+    const statusChanged = editingJob && editingJob.status !== payload.status
     const { error } = editingJob
       ? await supabase.from('jobs').update(payload).eq('id', editingJob.id)
       : await supabase.from('jobs').insert(payload)
@@ -143,6 +145,9 @@ export default function JobsPage() {
       toast.success(editingJob ? 'Job atualizado!' : 'Job criado!')
       setModalOpen(false)
       loadData()
+      if (statusChanged) {
+        notifyPush('Job atualizado', `"${payload.name}" mudou para ${STATUS_LABELS[payload.status]?.label || payload.status}`)
+      }
     }
     setSaving(false)
   }
@@ -157,6 +162,7 @@ export default function JobsPage() {
   async function quickStatus(job: JobWithClient, status: string) {
     await supabase.from('jobs').update({ status }).eq('id', job.id)
     loadData()
+    notifyPush('Job atualizado', `"${job.name}" mudou para ${STATUS_LABELS[status]?.label || status}`)
   }
 
   return (
