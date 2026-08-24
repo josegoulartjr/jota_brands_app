@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import type { DropResult } from '@hello-pangea/dnd'
-import { RefreshCw, ExternalLink, Settings2, Clock, DollarSign, Check, X, Trash2, Link, Package, Minus, Plus } from 'lucide-react'
+import { RefreshCw, ExternalLink, Settings2, Clock, DollarSign, Check, X, Trash2, Link, Package, MessageSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,14 +10,14 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatCurrency, getMonthName, calculateJobValue, computePackProgress, getPackTag, MONTHS } from '@/lib/utils'
-import type { Job, Client, Settings } from '@/types/database'
+import type { Job, Client, Settings, JobComment, PackItem } from '@/types/database'
 import toast from 'react-hot-toast'
 import { notifyPush } from '@/lib/push'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 
-interface JobWithClient extends Job { client?: Client }
+interface JobWithClient extends Job { client?: Client; job_comments?: { count: number }[] }
 
 const COLUMNS = {
   backlog:   { label: 'Backlog',   statuses: ['concluido'], targetStatus: 'concluido', accent: '#3A3A3A' },
@@ -35,7 +35,7 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 interface JobForm {
   name: string; client_id: string; period_month: number; period_year: number
   type: 'hora' | 'fechado' | 'pacote'; hours: string; hourly_rate: string; fixed_value: string
-  pack_total: string; pack_delivered: string
+  pack_total: string
   clickup_url: string; status: string; notes: string
 }
 
@@ -43,24 +43,24 @@ function emptyForm(status = 'concluido'): JobForm {
   return {
     name: '', client_id: '', period_month: new Date().getMonth() + 1, period_year: CURRENT_YEAR,
     type: 'fechado', hours: '', hourly_rate: '40', fixed_value: '',
-    pack_total: '10', pack_delivered: '0',
+    pack_total: '10',
     clickup_url: '', status, notes: '',
   }
 }
 
 // -------- Card --------
 function JobCard({
-  job, index, onEdit, onDelete, selected, onSelect, onAdjustPack,
+  job, index, onEdit, onDelete, selected, onSelect,
 }: {
   job: JobWithClient; index: number
   onEdit: (j: JobWithClient) => void
   onDelete: (id: string) => void
   selected: boolean
   onSelect: (id: string, value: boolean) => void
-  onAdjustPack: (job: JobWithClient, delta: number) => void
 }) {
   const value = calculateJobValue(job)
   const sb = STATUS_BADGE[job.status]
+  const commentCount = job.job_comments?.[0]?.count ?? 0
   return (
     <Draggable draggableId={job.id} index={index}>
       {(provided, snapshot) => (
@@ -123,23 +123,10 @@ function JobCard({
               )}
             </div>
             <div className="flex items-center gap-2">
-              {job.type === 'pacote' && (job.pack_delivered ?? 0) < (job.pack_total ?? 10) && (
-                <div className="flex items-center gap-0.5">
-                  <button
-                    onClick={e => { e.stopPropagation(); onAdjustPack(job, -1) }}
-                    className="text-zinc-500 hover:text-white transition-colors p-0.5 rounded"
-                    title="Remover entrega"
-                  >
-                    <Minus size={11} />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); onAdjustPack(job, 1) }}
-                    className="text-zinc-500 hover:text-white transition-colors p-0.5 rounded"
-                    title="Adicionar entrega"
-                  >
-                    <Plus size={11} />
-                  </button>
-                </div>
+              {commentCount > 0 && (
+                <span className="flex items-center gap-0.5 text-zinc-500 text-xs" title={`${commentCount} comentário${commentCount !== 1 ? 's' : ''}`}>
+                  <MessageSquare size={11} />{commentCount}
+                </span>
               )}
               {value > 0 && (
                 <span className="text-xs font-bold text-white">{formatCurrency(value)}</span>
@@ -189,6 +176,12 @@ export default function KanbanPage() {
   const [form, setForm] = useState<JobForm>(emptyForm())
   const [saving, setSaving] = useState(false)
 
+  // Comentários e links do pacote (carregados sob demanda ao abrir o modal)
+  const [comments, setComments] = useState<JobComment[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [packItems, setPackItems] = useState<PackItem[]>([])
+  const [newPackLink, setNewPackLink] = useState('')
+
   // ClickUp config modal
   const [cuModal, setCuModal] = useState(false)
   const [cuLists, setCuLists] = useState<{ id: string; name: string; space: string; folder?: string }[]>([])
@@ -207,7 +200,7 @@ export default function KanbanPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     const [jobsRes, clientsRes, settingsRes] = await Promise.all([
-      supabase.from('jobs').select('*, client:clients(*)').order('created_at', { ascending: false }),
+      supabase.from('jobs').select('*, client:clients(*), job_comments(count)').order('created_at', { ascending: false }),
       supabase.from('clients').select('*').order('name'),
       supabase.from('settings').select('*').limit(1).single(),
     ])
@@ -269,18 +262,6 @@ export default function KanbanPage() {
     }
   }
 
-  async function adjustPackProgress(job: JobWithClient, delta: number) {
-    const patch = computePackProgress(job, (job.pack_delivered ?? 0) + delta)
-    const justCompleted = !!patch.completed_at && job.completed_at !== patch.completed_at
-    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j))
-    const { error } = await supabase.from('jobs').update(patch).eq('id', job.id)
-    if (error) { toast.error('Erro ao atualizar progresso'); loadData() }
-    else if (justCompleted) {
-      toast.success('Pacote completo! 🎉')
-      notifyPush('Pacote completo! 🎉', `"${job.name}" atingiu ${patch.pack_delivered}/${job.pack_total ?? 10} — entra no faturamento de ${getMonthName(patch.period_month)}/${patch.period_year}`)
-    }
-  }
-
   async function onDragEnd(result: DropResult) {
     const { destination, draggableId } = result
     if (!destination) return
@@ -297,17 +278,79 @@ export default function KanbanPage() {
     }
   }
 
-  function openEdit(job: JobWithClient) {
+  async function openEdit(job: JobWithClient) {
     setEditingJob(job)
     setForm({
       name: job.name, client_id: job.client_id,
       period_month: job.period_month, period_year: job.period_year,
       type: job.type, hours: job.hours?.toString() || '',
       hourly_rate: job.hourly_rate.toString(), fixed_value: job.fixed_value?.toString() || '',
-      pack_total: (job.pack_total ?? 10).toString(), pack_delivered: (job.pack_delivered ?? 0).toString(),
+      pack_total: (job.pack_total ?? 10).toString(),
       clickup_url: job.clickup_url || '', status: job.status, notes: job.notes || '',
     })
+    setComments([])
+    setPackItems([])
     setEditModal(true)
+
+    const [commentsRes, packItemsRes] = await Promise.all([
+      supabase.from('job_comments').select('*').eq('job_id', job.id).order('created_at', { ascending: false }),
+      supabase.from('pack_items').select('*').eq('job_id', job.id).order('created_at'),
+    ])
+    if (commentsRes.data) setComments(commentsRes.data)
+    if (packItemsRes.data) setPackItems(packItemsRes.data)
+  }
+
+  async function addComment() {
+    if (!editingJob) return
+    const text = commentText.trim()
+    if (!text) return
+    const { data, error } = await supabase.from('job_comments').insert({ job_id: editingJob.id, text }).select().single()
+    if (error) return toast.error('Erro ao adicionar comentário')
+    setComments(prev => [data, ...prev])
+    setCommentText('')
+    loadData()
+  }
+
+  async function deleteComment(id: string) {
+    const { error } = await supabase.from('job_comments').delete().eq('id', id)
+    if (error) return toast.error('Erro ao remover comentário')
+    setComments(prev => prev.filter(c => c.id !== id))
+    loadData()
+  }
+
+  async function addPackLink() {
+    if (!editingJob) return
+    const url = newPackLink.trim()
+    if (!url) return
+    const { data, error } = await supabase.from('pack_items').insert({ job_id: editingJob.id, url }).select().single()
+    if (error) return toast.error('Erro ao adicionar link')
+    const nextItems = [...packItems, data]
+    setPackItems(nextItems)
+    setNewPackLink('')
+    await applyPackCount(nextItems.length)
+  }
+
+  async function removePackLink(id: string) {
+    if (!editingJob) return
+    const { error } = await supabase.from('pack_items').delete().eq('id', id)
+    if (error) return toast.error('Erro ao remover link')
+    const nextItems = packItems.filter(p => p.id !== id)
+    setPackItems(nextItems)
+    await applyPackCount(nextItems.length)
+  }
+
+  async function applyPackCount(count: number) {
+    if (!editingJob) return
+    const patch = computePackProgress(editingJob, count)
+    const justCompleted = !!patch.completed_at && editingJob.completed_at !== patch.completed_at
+    await supabase.from('jobs').update(patch).eq('id', editingJob.id)
+    setEditingJob(prev => (prev ? { ...prev, ...patch } : prev))
+    setForm(f => ({ ...f, period_month: patch.period_month, period_year: patch.period_year }))
+    loadData()
+    if (justCompleted) {
+      toast.success('Pacote completo! 🎉')
+      notifyPush('Pacote completo! 🎉', `"${editingJob.name}" atingiu ${patch.pack_delivered}/${editingJob.pack_total ?? 10} — entra no faturamento de ${getMonthName(patch.period_month)}/${patch.period_year}`)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -330,10 +373,10 @@ export default function KanbanPage() {
             pack_total: Number(form.pack_total) || 10,
             pack_delivered: editingJob?.pack_delivered ?? 0,
             completed_at: editingJob?.completed_at ?? null,
-            period_month: editingJob?.period_month ?? periodMonth,
-            period_year: editingJob?.period_year ?? periodYear,
+            period_month: periodMonth,
+            period_year: periodYear,
           },
-          Number(form.pack_delivered) || 0
+          packItems.length
         )
       : null
     const payload = {
@@ -568,7 +611,6 @@ export default function KanbanPage() {
                               onDelete={handleDelete}
                               selected={selectedIds.has(job.id)}
                               onSelect={toggleSelect}
-                              onAdjustPack={adjustPackProgress}
                             />
                           ))}
                           {provided.placeholder}
@@ -702,19 +744,98 @@ export default function KanbanPage() {
                   <Input type="number" placeholder="10" value={form.pack_total} onChange={e => setForm(f => ({ ...f, pack_total: e.target.value }))} />
                 </div>
               </div>
-              <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Entregues até agora</label>
-                <Input type="number" placeholder="0" value={form.pack_delivered} onChange={e => setForm(f => ({ ...f, pack_delivered: e.target.value }))} />
-              </div>
               <p className="text-zinc-500 text-xs">
-                Mês/Ano acima marca a origem do pacote (tag fixa). Ao completar a quantidade total, o valor passa a contar no faturamento do mês em que isso acontecer.
+                Mês/Ano acima marca a origem do pacote (tag fixa). Ao completar a quantidade total
+                de links abaixo, o valor passa a contar no faturamento do mês em que isso acontecer.
               </p>
+
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">
+                  Links dos conteúdos ({packItems.length}/{form.pack_total || 10})
+                </label>
+                {!editingJob && (
+                  <p className="text-zinc-500 text-xs">Salve o job primeiro pra poder adicionar os links.</p>
+                )}
+                {editingJob && (
+                  <>
+                    <div className="space-y-1.5 mb-2">
+                      {packItems.map((item, i) => (
+                        <div key={item.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2E2E2E' }}>
+                          <span className="text-zinc-500 text-xs w-5 shrink-0">{i + 1}.</span>
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-red-400 text-xs truncate flex-1 hover:underline">
+                            {item.url}
+                          </a>
+                          <button onClick={() => removePackLink(item.id)} className="text-zinc-500 hover:text-red-400 shrink-0">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      {packItems.length === 0 && (
+                        <p className="text-zinc-600 text-xs">Nenhum link adicionado ainda.</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="https://app.clickup.com/..."
+                        value={newPackLink}
+                        onChange={e => setNewPackLink(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPackLink() } }}
+                      />
+                      <Button type="button" variant="outline" onClick={addPackLink}>
+                        <Link size={14} /> Adicionar
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
           <div>
             <label className="text-xs text-zinc-400 mb-1 block">Link ClickUp</label>
             <Input placeholder="https://app.clickup.com/..." value={form.clickup_url} onChange={e => setForm(f => ({ ...f, clickup_url: e.target.value }))} />
           </div>
+
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1.5">
+              <MessageSquare size={12} /> Comentários
+            </label>
+            {!editingJob && (
+              <p className="text-zinc-500 text-xs">Salve o job primeiro pra poder adicionar comentários.</p>
+            )}
+            {editingJob && (
+              <>
+                <div className="flex gap-2 mb-2">
+                  <textarea
+                    rows={2}
+                    placeholder="Escreva um comentário..."
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    className="flex w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-red-700 resize-none"
+                  />
+                  <Button type="button" variant="outline" onClick={addComment} className="self-end shrink-0">
+                    <Check size={14} />
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {comments.map(c => (
+                    <div key={c.id} className="rounded-lg px-3 py-2 group/comment" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2E2E2E' }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-zinc-200 text-xs whitespace-pre-wrap flex-1">{c.text}</p>
+                        <button onClick={() => deleteComment(c.id)} className="text-zinc-600 hover:text-red-400 opacity-0 group-hover/comment:opacity-100 transition-opacity shrink-0">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <p className="text-zinc-500 text-[10px] mt-1">{new Date(c.created_at).toLocaleString('pt-BR')}</p>
+                    </div>
+                  ))}
+                  {comments.length === 0 && (
+                    <p className="text-zinc-600 text-xs">Nenhum comentário ainda.</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => setEditModal(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving}><Check size={16} />{saving ? 'Salvando...' : 'Salvar'}</Button>

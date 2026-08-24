@@ -173,3 +173,61 @@ ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_total INTEGER NOT NULL DEF
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_origin_month INTEGER CHECK (pack_origin_month BETWEEN 1 AND 12);
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_origin_year INTEGER;
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+-- ============================================
+-- MIGRATION: Comentários em jobs + links dos itens do Pacote
+-- Execute este SQL no Supabase SQL Editor
+-- ============================================
+
+-- Histórico de comentários por job (uso interno, não aparece na fatura)
+CREATE TABLE IF NOT EXISTS public.job_comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  job_id UUID NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Links dos conteúdos individuais do ClickUp que compõem um job tipo "pacote".
+-- A quantidade de linhas aqui é a própria fonte da verdade do contador
+-- pack_delivered (ver computePackProgress em src/lib/utils.ts).
+CREATE TABLE IF NOT EXISTS public.pack_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  job_id UUID NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_comments_job_id ON public.job_comments(job_id);
+CREATE INDEX IF NOT EXISTS idx_pack_items_job_id ON public.pack_items(job_id);
+
+ALTER TABLE public.job_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pack_items ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'job_comments'
+      AND policyname = 'Authenticated can do everything on job_comments'
+  ) THEN
+    CREATE POLICY "Authenticated can do everything on job_comments"
+      ON public.job_comments FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'pack_items'
+      AND policyname = 'Authenticated can do everything on pack_items'
+  ) THEN
+    CREATE POLICY "Authenticated can do everything on pack_items"
+      ON public.pack_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  END IF;
+
+  -- Leitura pública (sem login): permite que a página /fatura/[token] mostre
+  -- os links dos conteúdos entregues pro cliente final.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'pack_items'
+      AND policyname = 'Anyone can view pack_items'
+  ) THEN
+    CREATE POLICY "Anyone can view pack_items"
+      ON public.pack_items FOR SELECT TO anon USING (true);
+  END IF;
+END $$;

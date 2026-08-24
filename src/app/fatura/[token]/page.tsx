@@ -1,10 +1,10 @@
 'use client'
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, Fragment } from 'react'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, getMonthName, calculateJobValue, getPackTag } from '@/lib/utils'
-import type { Job, Client, Settings } from '@/types/database'
+import type { Job, Client, Settings, PackItem } from '@/types/database'
 
-interface JobWithClient extends Job { client?: Client }
+interface JobWithClient extends Job { client?: Client; pack_items?: PackItem[] }
 
 
 export default function FaturaPage({ params }: { params: Promise<{ token: string }> }) {
@@ -24,7 +24,7 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
       setInvoice(inv)
 
       const jobQuery = supabase
-        .from('jobs').select('*, client:clients(*)')
+        .from('jobs').select('*, client:clients(*), pack_items(*)')
         .eq('period_month', inv.month).eq('period_year', inv.year).order('created_at')
 
       const [jobsRes, settingsRes] = await Promise.all([
@@ -82,24 +82,42 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                 <tr><td colSpan={4} style={{ textAlign: 'center', color: '#555', padding: '40px 20px' }}>Nenhum job encontrado.</td></tr>
               )}
               {jobs.map((job, i) => (
-                <tr key={job.id} style={{ borderBottom: i < jobs.length - 1 ? '1px solid #222' : 'none' }}>
-                  <td style={{ padding: '14px 20px', color: '#fff' }}>{job.name}</td>
-                  <td style={{ padding: '14px 20px' }}>
-                    {job.client && (
-                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: job.client.color || '#444' }}>
-                        {job.client.name}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '14px 20px', color: '#888', fontSize: 13 }}>
-                    {job.type === 'hora' && `${job.hours || 0}h × R$${job.hourly_rate}/h`}
-                    {job.type === 'fechado' && 'Valor fechado'}
-                    {job.type === 'pacote' && getPackTag(job)}
-                  </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>
-                    {formatCurrency(calculateJobValue(job))}
-                  </td>
-                </tr>
+                <Fragment key={job.id}>
+                  <tr style={{ borderBottom: job.type === 'pacote' && job.pack_items?.length ? 'none' : (i < jobs.length - 1 ? '1px solid #222' : 'none') }}>
+                    <td style={{ padding: '14px 20px', color: '#fff' }}>{job.name}</td>
+                    <td style={{ padding: '14px 20px' }}>
+                      {job.client && (
+                        <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: job.client.color || '#444' }}>
+                          {job.client.name}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '14px 20px', color: '#888', fontSize: 13 }}>
+                      {job.type === 'hora' && `${job.hours || 0}h × R$${job.hourly_rate}/h`}
+                      {job.type === 'fechado' && 'Valor fechado'}
+                      {job.type === 'pacote' && getPackTag(job)}
+                    </td>
+                    <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>
+                      {formatCurrency(calculateJobValue(job))}
+                    </td>
+                  </tr>
+                  {job.type === 'pacote' && !!job.pack_items?.length && (
+                    <tr style={{ borderBottom: i < jobs.length - 1 ? '1px solid #222' : 'none' }}>
+                      <td colSpan={4} style={{ padding: '0 20px 16px 20px' }}>
+                        <div style={{ background: '#141414', border: '1px solid #222', borderRadius: 8, padding: '10px 14px' }}>
+                          <p style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Conteúdos entregues:</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {job.pack_items!.map((item, n) => (
+                              <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#E5321E', fontSize: 12, textDecoration: 'none', wordBreak: 'break-all' }}>
+                                {n + 1}. {item.url}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
             {jobs.length > 0 && (

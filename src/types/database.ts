@@ -31,6 +31,20 @@ export interface Job {
   completed_at?: string | null
 }
 
+export interface JobComment {
+  id: string
+  job_id: string
+  text: string
+  created_at: string
+}
+
+export interface PackItem {
+  id: string
+  job_id: string
+  url: string
+  created_at: string
+}
+
 export interface Transaction {
   id: string
   description: string
@@ -78,6 +92,16 @@ export type Database = {
         Row: Settings
         Insert: Omit<Settings, 'id'>
         Update: Partial<Omit<Settings, 'id'>>
+      }
+      job_comments: {
+        Row: JobComment
+        Insert: Omit<JobComment, 'id' | 'created_at'>
+        Update: Partial<Omit<JobComment, 'id' | 'created_at'>>
+      }
+      pack_items: {
+        Row: PackItem
+        Insert: Omit<PackItem, 'id' | 'created_at'>
+        Update: Partial<Omit<PackItem, 'id' | 'created_at'>>
       }
     }
   }
