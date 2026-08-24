@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
+import { formatCurrency, getMonthName, calculateJobValue, getPackTag, MONTHS } from '@/lib/utils'
 import type { Job, Client, Settings } from '@/types/database'
 import toast from 'react-hot-toast'
 import { notifyPush } from '@/lib/push'
@@ -325,7 +325,9 @@ export default function RelatorioPage() {
                     {job.client && <Badge color={job.client.color}>{job.client.name}</Badge>}
                   </td>
                   <td className="px-4 py-3 text-zinc-400 text-xs">
-                    {job.type === 'hora' ? `${job.hours || 0}h × R$${job.hourly_rate}/h` : 'Valor fechado'}
+                    {job.type === 'hora' && `${job.hours || 0}h × R$${job.hourly_rate}/h`}
+                    {job.type === 'fechado' && 'Valor fechado'}
+                    {job.type === 'pacote' && getPackTag(job)}
                   </td>
                   <td className="px-4 py-3">
                     {job.clickup_url && (

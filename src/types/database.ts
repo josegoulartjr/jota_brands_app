@@ -1,4 +1,4 @@
-export type JobType = 'hora' | 'fechado'
+export type JobType = 'hora' | 'fechado' | 'pacote'
 export type JobStatus = 'concluido' | 'faturado' | 'pago'
 export type TransactionType = 'entrada' | 'saida'
 
@@ -24,6 +24,11 @@ export interface Job {
   status: JobStatus
   notes?: string
   created_at: string
+  pack_delivered?: number
+  pack_total?: number
+  pack_origin_month?: number
+  pack_origin_year?: number
+  completed_at?: string | null
 }
 
 export interface Transaction {

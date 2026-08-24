@@ -2,14 +2,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import type { DropResult } from '@hello-pangea/dnd'
-import { RefreshCw, ExternalLink, Settings2, Clock, DollarSign, Check, X, Trash2, Link } from 'lucide-react'
+import { RefreshCw, ExternalLink, Settings2, Clock, DollarSign, Check, X, Trash2, Link, Package, Minus, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
+import { formatCurrency, getMonthName, calculateJobValue, computePackProgress, getPackTag, MONTHS } from '@/lib/utils'
 import type { Job, Client, Settings } from '@/types/database'
 import toast from 'react-hot-toast'
 import { notifyPush } from '@/lib/push'
@@ -34,7 +34,8 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 
 interface JobForm {
   name: string; client_id: string; period_month: number; period_year: number
-  type: 'hora' | 'fechado'; hours: string; hourly_rate: string; fixed_value: string
+  type: 'hora' | 'fechado' | 'pacote'; hours: string; hourly_rate: string; fixed_value: string
+  pack_total: string; pack_delivered: string
   clickup_url: string; status: string; notes: string
 }
 
@@ -42,19 +43,21 @@ function emptyForm(status = 'concluido'): JobForm {
   return {
     name: '', client_id: '', period_month: new Date().getMonth() + 1, period_year: CURRENT_YEAR,
     type: 'fechado', hours: '', hourly_rate: '40', fixed_value: '',
+    pack_total: '10', pack_delivered: '0',
     clickup_url: '', status, notes: '',
   }
 }
 
 // -------- Card --------
 function JobCard({
-  job, index, onEdit, onDelete, selected, onSelect,
+  job, index, onEdit, onDelete, selected, onSelect, onAdjustPack,
 }: {
   job: JobWithClient; index: number
   onEdit: (j: JobWithClient) => void
   onDelete: (id: string) => void
   selected: boolean
   onSelect: (id: string, value: boolean) => void
+  onAdjustPack: (job: JobWithClient, delta: number) => void
 }) {
   const value = calculateJobValue(job)
   const sb = STATUS_BADGE[job.status]
@@ -104,14 +107,40 @@ function JobCard({
           {/* Info row */}
           <div className="flex items-center justify-between pl-6">
             <div className="flex items-center gap-3 text-xs" style={{ color: '#888' }}>
-              <span>{getMonthName(job.period_month)}/{job.period_year}</span>
-              {job.type === 'hora' ? (
-                <span className="flex items-center gap-1"><Clock size={11} />{job.hours || 0}h</span>
+              {job.type === 'pacote' ? (
+                <span className="flex items-center gap-1" style={{ color: value > 0 ? '#059669' : '#888' }}>
+                  <Package size={11} />{getPackTag(job)}
+                </span>
               ) : (
-                <span className="flex items-center gap-1"><DollarSign size={11} />Fechado</span>
+                <>
+                  <span>{getMonthName(job.period_month)}/{job.period_year}</span>
+                  {job.type === 'hora' ? (
+                    <span className="flex items-center gap-1"><Clock size={11} />{job.hours || 0}h</span>
+                  ) : (
+                    <span className="flex items-center gap-1"><DollarSign size={11} />Fechado</span>
+                  )}
+                </>
               )}
             </div>
             <div className="flex items-center gap-2">
+              {job.type === 'pacote' && (job.pack_delivered ?? 0) < (job.pack_total ?? 10) && (
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={e => { e.stopPropagation(); onAdjustPack(job, -1) }}
+                    className="text-zinc-500 hover:text-white transition-colors p-0.5 rounded"
+                    title="Remover entrega"
+                  >
+                    <Minus size={11} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onAdjustPack(job, 1) }}
+                    className="text-zinc-500 hover:text-white transition-colors p-0.5 rounded"
+                    title="Adicionar entrega"
+                  >
+                    <Plus size={11} />
+                  </button>
+                </div>
+              )}
               {value > 0 && (
                 <span className="text-xs font-bold text-white">{formatCurrency(value)}</span>
               )}
@@ -240,6 +269,18 @@ export default function KanbanPage() {
     }
   }
 
+  async function adjustPackProgress(job: JobWithClient, delta: number) {
+    const patch = computePackProgress(job, (job.pack_delivered ?? 0) + delta)
+    const justCompleted = !!patch.completed_at && job.completed_at !== patch.completed_at
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j))
+    const { error } = await supabase.from('jobs').update(patch).eq('id', job.id)
+    if (error) { toast.error('Erro ao atualizar progresso'); loadData() }
+    else if (justCompleted) {
+      toast.success('Pacote completo! 🎉')
+      notifyPush('Pacote completo! 🎉', `"${job.name}" atingiu ${patch.pack_delivered}/${job.pack_total ?? 10} — entra no faturamento de ${getMonthName(patch.period_month)}/${patch.period_year}`)
+    }
+  }
+
   async function onDragEnd(result: DropResult) {
     const { destination, draggableId } = result
     if (!destination) return
@@ -263,6 +304,7 @@ export default function KanbanPage() {
       period_month: job.period_month, period_year: job.period_year,
       type: job.type, hours: job.hours?.toString() || '',
       hourly_rate: job.hourly_rate.toString(), fixed_value: job.fixed_value?.toString() || '',
+      pack_total: (job.pack_total ?? 10).toString(), pack_delivered: (job.pack_delivered ?? 0).toString(),
       clickup_url: job.clickup_url || '', status: job.status, notes: job.notes || '',
     })
     setEditModal(true)
@@ -279,17 +321,39 @@ export default function KanbanPage() {
     if (!form.name.trim()) return toast.error('Informe o nome do job')
     if (!form.client_id) return toast.error('Selecione um cliente')
     setSaving(true)
+    const isPacote = form.type === 'pacote'
+    const periodMonth = Number(form.period_month)
+    const periodYear = Number(form.period_year)
+    const packPatch = isPacote
+      ? computePackProgress(
+          {
+            pack_total: Number(form.pack_total) || 10,
+            pack_delivered: editingJob?.pack_delivered ?? 0,
+            completed_at: editingJob?.completed_at ?? null,
+            period_month: editingJob?.period_month ?? periodMonth,
+            period_year: editingJob?.period_year ?? periodYear,
+          },
+          Number(form.pack_delivered) || 0
+        )
+      : null
     const payload = {
       name: form.name.trim(), client_id: form.client_id,
-      period_month: Number(form.period_month), period_year: Number(form.period_year),
+      period_month: packPatch ? packPatch.period_month : periodMonth,
+      period_year: packPatch ? packPatch.period_year : periodYear,
       type: form.type,
       hours: form.type === 'hora' ? (Number(form.hours) || null) : null,
       hourly_rate: Number(form.hourly_rate) || 40,
-      fixed_value: form.type === 'fechado' ? (Number(form.fixed_value) || null) : null,
+      fixed_value: (form.type === 'fechado' || isPacote) ? (Number(form.fixed_value) || null) : null,
+      pack_total: isPacote ? (Number(form.pack_total) || 10) : null,
+      pack_delivered: isPacote ? packPatch!.pack_delivered : null,
+      pack_origin_month: isPacote ? (editingJob?.pack_origin_month ?? periodMonth) : null,
+      pack_origin_year: isPacote ? (editingJob?.pack_origin_year ?? periodYear) : null,
+      completed_at: isPacote ? packPatch!.completed_at : null,
       clickup_url: form.clickup_url.trim() || null,
       status: form.status, notes: form.notes.trim() || null,
     }
     const statusChanged = editingJob && editingJob.status !== payload.status
+    const packJustCompleted = isPacote && !!packPatch!.completed_at && editingJob?.completed_at !== packPatch!.completed_at
     const { error } = editingJob
       ? await supabase.from('jobs').update(payload).eq('id', editingJob.id)
       : await supabase.from('jobs').insert(payload)
@@ -300,6 +364,9 @@ export default function KanbanPage() {
       loadData()
       if (statusChanged) {
         notifyPush('Job atualizado', `"${payload.name}" mudou para ${STATUS_BADGE[payload.status]?.label || payload.status}`)
+      }
+      if (packJustCompleted) {
+        notifyPush('Pacote completo! 🎉', `"${payload.name}" atingiu ${payload.pack_delivered}/${payload.pack_total} — entra no faturamento de ${getMonthName(payload.period_month)}/${payload.period_year}`)
       }
     }
     setSaving(false)
@@ -501,6 +568,7 @@ export default function KanbanPage() {
                               onDelete={handleDelete}
                               selected={selectedIds.has(job.id)}
                               onSelect={toggleSelect}
+                              onAdjustPack={adjustPackProgress}
                             />
                           ))}
                           {provided.placeholder}
@@ -593,13 +661,13 @@ export default function KanbanPage() {
           <div>
             <label className="text-xs text-zinc-400 mb-2 block">Tipo de cobrança</label>
             <div className="flex gap-2">
-              {(['hora', 'fechado'] as const).map(t => (
+              {(['hora', 'fechado', 'pacote'] as const).map(t => (
                 <button key={t} type="button" onClick={() => setForm(f => ({ ...f, type: t }))}
                   className="flex-1 py-2 rounded-lg text-sm border transition-colors"
                   style={form.type === t
                     ? { borderColor: '#B72818', backgroundColor: '#B7281820', color: '#E5321E' }
                     : { borderColor: '#3A3A3A', color: '#888' }}>
-                  {t === 'hora' ? 'Por hora' : 'Valor fechado'}
+                  {t === 'hora' ? 'Por hora' : t === 'fechado' ? 'Valor fechado' : 'Pacote'}
                 </button>
               ))}
             </div>
@@ -620,6 +688,27 @@ export default function KanbanPage() {
             <div>
               <label className="text-xs text-zinc-400 mb-1 block">Valor fixo (R$)</label>
               <Input type="number" placeholder="0,00" value={form.fixed_value} onChange={e => setForm(f => ({ ...f, fixed_value: e.target.value }))} />
+            </div>
+          )}
+          {form.type === 'pacote' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Valor do pacote (R$)</label>
+                  <Input type="number" placeholder="150,00" value={form.fixed_value} onChange={e => setForm(f => ({ ...f, fixed_value: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Qtd. de conteúdos</label>
+                  <Input type="number" placeholder="10" value={form.pack_total} onChange={e => setForm(f => ({ ...f, pack_total: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Entregues até agora</label>
+                <Input type="number" placeholder="0" value={form.pack_delivered} onChange={e => setForm(f => ({ ...f, pack_delivered: e.target.value }))} />
+              </div>
+              <p className="text-zinc-500 text-xs">
+                Mês/Ano acima marca a origem do pacote (tag fixa). Ao completar a quantidade total, o valor passa a contar no faturamento do mês em que isso acontecer.
+              </p>
             </div>
           )}
           <div>

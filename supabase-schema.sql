@@ -133,3 +133,43 @@ CREATE POLICY "Users delete their own push subscription"
   ON public.push_subscriptions FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
+
+-- ============================================
+-- MIGRATION: Job tipo "Pacote" (ex: Pack Social Media — 10 conteúdos
+-- fechados por um valor único, entregues ao longo de vários meses)
+-- Execute este SQL no Supabase SQL Editor
+-- ============================================
+
+DO $$
+DECLARE
+  con_name text;
+BEGIN
+  -- Localiza a constraint de check existente sobre a coluna "type"
+  -- (o nome pode variar) e a substitui por uma que aceita 'pacote'.
+  SELECT conname INTO con_name
+  FROM pg_constraint
+  WHERE conrelid = 'public.jobs'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) ILIKE '%hora%'
+    AND pg_get_constraintdef(oid) ILIKE '%fechado%';
+
+  IF con_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.jobs DROP CONSTRAINT %I', con_name);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_type_check') THEN
+    ALTER TABLE public.jobs ADD CONSTRAINT jobs_type_check CHECK (type IN ('hora', 'fechado', 'pacote'));
+  END IF;
+END $$;
+
+-- pack_delivered/pack_total: contador de progresso do pacote (ex: 7 de 10)
+-- pack_origin_month/pack_origin_year: tag fixa do período de origem do pacote
+--   (nunca muda depois de criado, ex: "Jul/2026")
+-- completed_at: preenchido automaticamente quando pack_delivered atinge
+--   pack_total — é nesse momento que period_month/period_year (usados no
+--   faturamento) são ajustados para o mês em que o pacote de fato fechou
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_delivered INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_total INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_origin_month INTEGER CHECK (pack_origin_month BETWEEN 1 AND 12);
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS pack_origin_year INTEGER;
+ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;

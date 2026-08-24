@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, use } from 'react'
 import { supabase } from '@/lib/supabase'
-import { formatCurrency, getMonthName, calculateJobValue } from '@/lib/utils'
+import { formatCurrency, getMonthName, calculateJobValue, getPackTag } from '@/lib/utils'
 import type { Job, Client, Settings } from '@/types/database'
 
 interface JobWithClient extends Job { client?: Client }
@@ -92,7 +92,9 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                     )}
                   </td>
                   <td style={{ padding: '14px 20px', color: '#888', fontSize: 13 }}>
-                    {job.type === 'hora' ? `${job.hours || 0}h × R$${job.hourly_rate}/h` : 'Valor fechado'}
+                    {job.type === 'hora' && `${job.hours || 0}h × R$${job.hourly_rate}/h`}
+                    {job.type === 'fechado' && 'Valor fechado'}
+                    {job.type === 'pacote' && getPackTag(job)}
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>
                     {formatCurrency(calculateJobValue(job))}

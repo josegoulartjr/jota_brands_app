@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, ExternalLink, Pencil, Trash2, Check, X, Clock, DollarSign } from 'lucide-react'
+import { Plus, ExternalLink, Pencil, Trash2, Check, X, Clock, DollarSign, Package } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
-import { formatCurrency, getMonthName, calculateJobValue, MONTHS } from '@/lib/utils'
+import { formatCurrency, getMonthName, calculateJobValue, computePackProgress, getPackTag, MONTHS } from '@/lib/utils'
 import type { Job, Client } from '@/types/database'
 import toast from 'react-hot-toast'
 import { notifyPush } from '@/lib/push'
@@ -30,10 +30,12 @@ interface JobForm {
   client_id: string
   period_month: number
   period_year: number
-  type: 'hora' | 'fechado'
+  type: 'hora' | 'fechado' | 'pacote'
   hours: string
   hourly_rate: string
   fixed_value: string
+  pack_total: string
+  pack_delivered: string
   clickup_url: string
   status: string
   notes: string
@@ -48,6 +50,8 @@ const emptyForm = (): JobForm => ({
   hours: '',
   hourly_rate: '40',
   fixed_value: '',
+  pack_total: '10',
+  pack_delivered: '0',
   clickup_url: '',
   status: 'concluido',
   notes: '',
@@ -108,6 +112,8 @@ export default function JobsPage() {
       hours: job.hours?.toString() || '',
       hourly_rate: job.hourly_rate.toString(),
       fixed_value: job.fixed_value?.toString() || '',
+      pack_total: (job.pack_total ?? 10).toString(),
+      pack_delivered: (job.pack_delivered ?? 0).toString(),
       clickup_url: job.clickup_url || '',
       status: job.status,
       notes: job.notes || '',
@@ -120,21 +126,43 @@ export default function JobsPage() {
     if (!form.client_id) return toast.error('Selecione um cliente')
 
     setSaving(true)
+    const isPacote = form.type === 'pacote'
+    const periodMonth = Number(form.period_month)
+    const periodYear = Number(form.period_year)
+    const packPatch = isPacote
+      ? computePackProgress(
+          {
+            pack_total: Number(form.pack_total) || 10,
+            pack_delivered: editingJob?.pack_delivered ?? 0,
+            completed_at: editingJob?.completed_at ?? null,
+            period_month: editingJob?.period_month ?? periodMonth,
+            period_year: editingJob?.period_year ?? periodYear,
+          },
+          Number(form.pack_delivered) || 0
+        )
+      : null
+
     const payload = {
       name: form.name.trim(),
       client_id: form.client_id,
-      period_month: Number(form.period_month),
-      period_year: Number(form.period_year),
+      period_month: packPatch ? packPatch.period_month : periodMonth,
+      period_year: packPatch ? packPatch.period_year : periodYear,
       type: form.type,
       hours: form.type === 'hora' ? (Number(form.hours) || null) : null,
       hourly_rate: Number(form.hourly_rate) || 40,
-      fixed_value: form.type === 'fechado' ? (Number(form.fixed_value) || null) : null,
+      fixed_value: (form.type === 'fechado' || isPacote) ? (Number(form.fixed_value) || null) : null,
+      pack_total: isPacote ? (Number(form.pack_total) || 10) : null,
+      pack_delivered: isPacote ? packPatch!.pack_delivered : null,
+      pack_origin_month: isPacote ? (editingJob?.pack_origin_month ?? periodMonth) : null,
+      pack_origin_year: isPacote ? (editingJob?.pack_origin_year ?? periodYear) : null,
+      completed_at: isPacote ? packPatch!.completed_at : null,
       clickup_url: form.clickup_url.trim() || null,
       status: form.status,
       notes: form.notes.trim() || null,
     }
 
     const statusChanged = editingJob && editingJob.status !== payload.status
+    const packJustCompleted = isPacote && !!packPatch!.completed_at && editingJob?.completed_at !== packPatch!.completed_at
     const { error } = editingJob
       ? await supabase.from('jobs').update(payload).eq('id', editingJob.id)
       : await supabase.from('jobs').insert(payload)
@@ -147,6 +175,9 @@ export default function JobsPage() {
       loadData()
       if (statusChanged) {
         notifyPush('Job atualizado', `"${payload.name}" mudou para ${STATUS_LABELS[payload.status]?.label || payload.status}`)
+      }
+      if (packJustCompleted) {
+        notifyPush('Pacote completo! 🎉', `"${payload.name}" atingiu ${payload.pack_delivered}/${payload.pack_total} — entra no faturamento de ${getMonthName(payload.period_month)}/${payload.period_year}`)
       }
     }
     setSaving(false)
@@ -256,15 +287,22 @@ export default function JobsPage() {
                     {getMonthName(job.period_month)}/{job.period_year}
                   </td>
                   <td className="px-4 py-3">
-                    {job.type === 'hora' ? (
+                    {job.type === 'hora' && (
                       <span className="flex items-center gap-1 text-zinc-400 text-xs">
                         <Clock size={12} />
                         {job.hours || 0}h
                       </span>
-                    ) : (
+                    )}
+                    {job.type === 'fechado' && (
                       <span className="flex items-center gap-1 text-zinc-400 text-xs">
                         <DollarSign size={12} />
                         Fechado
+                      </span>
+                    )}
+                    {job.type === 'pacote' && (
+                      <span className="flex items-center gap-1 text-xs" style={{ color: (job.pack_delivered ?? 0) >= (job.pack_total ?? 10) ? '#059669' : '#888' }}>
+                        <Package size={12} />
+                        {getPackTag(job)}
                       </span>
                     )}
                   </td>
@@ -394,8 +432,57 @@ export default function JobsPage() {
               >
                 Valor fechado
               </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, type: 'pacote' }))}
+                className={`flex-1 py-2 rounded-lg text-sm border transition-colors ${
+                  form.type === 'pacote'
+                    ? 'border-red-700 bg-red-900/20 text-red-400'
+                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                }`}
+              >
+                Pacote
+              </button>
             </div>
           </div>
+
+          {form.type === 'pacote' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Valor do pacote (R$)</label>
+                  <Input
+                    type="number"
+                    placeholder="150,00"
+                    value={form.fixed_value}
+                    onChange={e => setForm(f => ({ ...f, fixed_value: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 mb-1 block">Qtd. de conteúdos</label>
+                  <Input
+                    type="number"
+                    placeholder="10"
+                    value={form.pack_total}
+                    onChange={e => setForm(f => ({ ...f, pack_total: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 mb-1 block">Entregues até agora</label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={form.pack_delivered}
+                  onChange={e => setForm(f => ({ ...f, pack_delivered: e.target.value }))}
+                />
+              </div>
+              <p className="text-zinc-500 text-xs">
+                O Mês/Ano acima marca a origem do pacote (tag fixa). Ao atingir a quantidade total,
+                o valor passa a contar no faturamento do mês em que isso acontecer.
+              </p>
+            </div>
+          )}
 
           {form.type === 'hora' && (
             <div className="grid grid-cols-2 gap-4">
