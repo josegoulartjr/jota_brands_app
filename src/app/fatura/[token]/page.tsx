@@ -14,6 +14,16 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
   const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [openPacks, setOpenPacks] = useState<Set<string>>(new Set())
+
+  function togglePack(id: string) {
+    setOpenPacks(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     async function load() {
@@ -81,10 +91,28 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
               {jobs.length === 0 && (
                 <tr><td colSpan={4} style={{ textAlign: 'center', color: '#555', padding: '40px 20px' }}>Nenhum job encontrado.</td></tr>
               )}
-              {jobs.map((job, i) => (
+              {jobs.map((job, i) => {
+                const packItems = job.type === 'pacote'
+                  ? [...(job.pack_items || [])].sort((a, b) => a.created_at.localeCompare(b.created_at))
+                  : []
+                const isOpen = openPacks.has(job.id)
+                return (
                 <Fragment key={job.id}>
-                  <tr style={{ borderBottom: job.type === 'pacote' && job.pack_items?.length ? 'none' : (i < jobs.length - 1 ? '1px solid #222' : 'none') }}>
-                    <td style={{ padding: '14px 20px', color: '#fff' }}>{job.name}</td>
+                  <tr style={{ borderBottom: isOpen && packItems.length ? 'none' : (i < jobs.length - 1 ? '1px solid #222' : 'none') }}>
+                    <td style={{ padding: '14px 20px', color: '#fff' }}>
+                      {job.name}
+                      {packItems.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => togglePack(job.id)}
+                          aria-expanded={isOpen}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, padding: 0, background: 'none', border: 'none', color: '#E5321E', fontSize: 12, cursor: 'pointer' }}
+                        >
+                          {isOpen ? 'Ocultar conteúdos' : `Ver conteúdos (${packItems.length})`}
+                          <span style={{ display: 'inline-block', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+                        </button>
+                      )}
+                    </td>
                     <td style={{ padding: '14px 20px' }}>
                       {job.client && (
                         <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, color: '#fff', background: job.client.color || '#444' }}>
@@ -101,13 +129,13 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                       {formatCurrency(calculateJobValue(job))}
                     </td>
                   </tr>
-                  {job.type === 'pacote' && !!job.pack_items?.length && (
+                  {isOpen && packItems.length > 0 && (
                     <tr style={{ borderBottom: i < jobs.length - 1 ? '1px solid #222' : 'none' }}>
                       <td colSpan={4} style={{ padding: '0 20px 16px 20px' }}>
                         <div style={{ background: '#141414', border: '1px solid #222', borderRadius: 8, padding: '10px 14px' }}>
                           <p style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Conteúdos entregues:</p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {job.pack_items!.map((item, n) => (
+                            {packItems.map((item, n) => (
                               <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#E5321E', fontSize: 12, textDecoration: 'none', wordBreak: 'break-all' }}>
                                 {item.title || `${n + 1}. ${item.url}`}
                               </a>
@@ -118,7 +146,8 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                     </tr>
                   )}
                 </Fragment>
-              ))}
+                )
+              })}
             </tbody>
             {jobs.length > 0 && (
               <tfoot>
