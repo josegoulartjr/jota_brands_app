@@ -42,6 +42,7 @@ export interface PackItem {
   id: string
   job_id: string
   url: string
+  title?: string | null
   created_at: string
 }
 

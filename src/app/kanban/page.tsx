@@ -13,6 +13,7 @@ import { formatCurrency, getMonthName, calculateJobValue, computePackProgress, g
 import type { Job, Client, Settings, JobComment, PackItem } from '@/types/database'
 import toast from 'react-hot-toast'
 import { notifyPush } from '@/lib/push'
+import { fetchClickUpTitle, fillMissingPackTitles } from '@/lib/clickup'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
@@ -181,6 +182,7 @@ export default function KanbanPage() {
   const [commentText, setCommentText] = useState('')
   const [packItems, setPackItems] = useState<PackItem[]>([])
   const [newPackLink, setNewPackLink] = useState('')
+  const [addingPackLink, setAddingPackLink] = useState(false)
 
   // ClickUp config modal
   const [cuModal, setCuModal] = useState(false)
@@ -297,7 +299,12 @@ export default function KanbanPage() {
       supabase.from('pack_items').select('*').eq('job_id', job.id).order('created_at'),
     ])
     if (commentsRes.data) setComments(commentsRes.data)
-    if (packItemsRes.data) setPackItems(packItemsRes.data)
+    if (packItemsRes.data) {
+      setPackItems(packItemsRes.data)
+      // Links salvos antes de existir o título: busca no ClickUp em segundo plano
+      const filled = await fillMissingPackTitles(packItemsRes.data)
+      setPackItems(prev => prev.map(p => filled.find(f => f.id === p.id) ?? p))
+    }
   }
 
   async function addComment() {
@@ -321,9 +328,13 @@ export default function KanbanPage() {
   async function addPackLink() {
     if (!editingJob) return
     const url = newPackLink.trim()
-    if (!url) return
-    const { data, error } = await supabase.from('pack_items').insert({ job_id: editingJob.id, url }).select().single()
+    if (!url || addingPackLink) return
+    setAddingPackLink(true)
+    const title = await fetchClickUpTitle(url)
+    const { data, error } = await supabase.from('pack_items').insert({ job_id: editingJob.id, url, title }).select().single()
+    setAddingPackLink(false)
     if (error) return toast.error('Erro ao adicionar link')
+    if (!title) toast('Título do ClickUp não encontrado — o link foi salvo mesmo assim.')
     const nextItems = [...packItems, data]
     setPackItems(nextItems)
     setNewPackLink('')
@@ -762,8 +773,8 @@ export default function KanbanPage() {
                       {packItems.map((item, i) => (
                         <div key={item.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5" style={{ backgroundColor: '#1E1E1E', border: '1px solid #2E2E2E' }}>
                           <span className="text-zinc-500 text-xs w-5 shrink-0">{i + 1}.</span>
-                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-red-400 text-xs truncate flex-1 hover:underline">
-                            {item.url}
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" title={item.url} className="text-red-400 text-xs truncate flex-1 hover:underline">
+                            {item.title || item.url}
                           </a>
                           <button onClick={() => removePackLink(item.id)} className="text-zinc-500 hover:text-red-400 shrink-0">
                             <Trash2 size={13} />
@@ -781,8 +792,8 @@ export default function KanbanPage() {
                         onChange={e => setNewPackLink(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPackLink() } }}
                       />
-                      <Button type="button" variant="outline" onClick={addPackLink}>
-                        <Link size={14} /> Adicionar
+                      <Button type="button" variant="outline" onClick={addPackLink} disabled={addingPackLink}>
+                        <Link size={14} /> {addingPackLink ? 'Buscando...' : 'Adicionar'}
                       </Button>
                     </div>
                   </>

@@ -109,7 +109,7 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {job.pack_items!.map((item, n) => (
                               <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#E5321E', fontSize: 12, textDecoration: 'none', wordBreak: 'break-all' }}>
-                                {n + 1}. {item.url}
+                                {item.title || `${n + 1}. ${item.url}`}
                               </a>
                             ))}
                           </div>

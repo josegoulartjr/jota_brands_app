@@ -197,6 +197,9 @@ CREATE TABLE IF NOT EXISTS public.pack_items (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Título do card no ClickUp, exibido no lugar da URL (modal e fatura).
+ALTER TABLE public.pack_items ADD COLUMN IF NOT EXISTS title TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_job_comments_job_id ON public.job_comments(job_id);
 CREATE INDEX IF NOT EXISTS idx_pack_items_job_id ON public.pack_items(job_id);
 
