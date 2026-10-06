@@ -6,6 +6,28 @@ import type { Job, Client, Settings, PackItem } from '@/types/database'
 
 interface JobWithClient extends Job { client?: Client; pack_items?: PackItem[] }
 
+function safeUrl(url?: string | null): string | undefined {
+  if (!url) return undefined
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:' ? url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const INVOICE_STYLES = `
+  .fatura-row { transition: background-color 0.15s ease; }
+  .fatura-row:hover { background-color: #222; }
+  .fatura-job-link { color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .fatura-job-link:hover { color: #E5321E; text-decoration: underline; text-underline-offset: 3px; }
+  .fatura-job-link .fatura-ext { opacity: 0.4; font-size: 11px; transition: opacity 0.15s ease; }
+  .fatura-job-link:hover .fatura-ext { opacity: 1; }
+  .fatura-pack-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; margin: 0 -8px; border-radius: 6px; color: #ccc; font-size: 12px; text-decoration: none; word-break: break-word; transition: background-color 0.15s ease, color 0.15s ease; }
+  a.fatura-pack-item:hover { background-color: #222; color: #E5321E; }
+  .fatura-pack-item .fatura-ext { opacity: 0.4; font-size: 11px; transition: opacity 0.15s ease; }
+  a.fatura-pack-item:hover .fatura-ext { opacity: 1; }
+`
 
 export default function FaturaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -14,10 +36,10 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
   const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [openPacks, setOpenPacks] = useState<Set<string>>(new Set())
+  const [collapsedPacks, setCollapsedPacks] = useState<Set<string>>(new Set())
 
   function togglePack(id: string) {
-    setOpenPacks(prev => {
+    setCollapsedPacks(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -70,6 +92,7 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
 
   return (
     <div style={{ background: '#111111', minHeight: '100vh', padding: '40px 16px 64px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <style>{INVOICE_STYLES}</style>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div style={{ background: '#B72818', borderRadius: '12px 12px 0 0', padding: '24px 28px' }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 4 }}>A sua fatura chegou!</div>
@@ -95,12 +118,18 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                 const packItems = job.type === 'pacote'
                   ? [...(job.pack_items || [])].sort((a, b) => a.created_at.localeCompare(b.created_at))
                   : []
-                const isOpen = openPacks.has(job.id)
+                const isOpen = !collapsedPacks.has(job.id)
+                const clickupUrl = safeUrl(job.clickup_url)
                 return (
                 <Fragment key={job.id}>
-                  <tr style={{ borderBottom: isOpen && packItems.length ? 'none' : (i < jobs.length - 1 ? '1px solid #222' : 'none') }}>
+                  <tr className="fatura-row" style={{ borderBottom: isOpen && packItems.length ? 'none' : (i < jobs.length - 1 ? '1px solid #222' : 'none') }}>
                     <td style={{ padding: '14px 20px', color: '#fff' }}>
-                      {job.name}
+                      {clickupUrl ? (
+                        <a href={clickupUrl} target="_blank" rel="noopener noreferrer" className="fatura-job-link" title="Abrir tarefa no ClickUp">
+                          {job.name}
+                          <span className="fatura-ext" aria-hidden="true">↗</span>
+                        </a>
+                      ) : job.name}
                       {packItems.length > 0 && (
                         <button
                           type="button"
@@ -133,13 +162,20 @@ export default function FaturaPage({ params }: { params: Promise<{ token: string
                     <tr style={{ borderBottom: i < jobs.length - 1 ? '1px solid #222' : 'none' }}>
                       <td colSpan={4} style={{ padding: '0 20px 16px 20px' }}>
                         <div style={{ background: '#141414', border: '1px solid #222', borderRadius: 8, padding: '10px 14px' }}>
-                          <p style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Conteúdos entregues:</p>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {packItems.map((item, n) => (
-                              <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#E5321E', fontSize: 12, textDecoration: 'none', wordBreak: 'break-all' }}>
-                                {item.title || `${n + 1}. ${item.url}`}
-                              </a>
-                            ))}
+                          <p style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Conteúdos entregues ({packItems.length}):</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {packItems.map((item, n) => {
+                              const itemUrl = safeUrl(item.url)
+                              const label = `${n + 1}. ${item.title || item.url}`
+                              return itemUrl ? (
+                                <a key={item.id} href={itemUrl} target="_blank" rel="noopener noreferrer" className="fatura-pack-item" title="Abrir conteúdo no ClickUp">
+                                  <span>{label}</span>
+                                  <span className="fatura-ext" aria-hidden="true">↗</span>
+                                </a>
+                              ) : (
+                                <span key={item.id} className="fatura-pack-item">{label}</span>
+                              )
+                            })}
                           </div>
                         </div>
                       </td>
